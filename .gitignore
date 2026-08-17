@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.vercel
+.venv/
+venv/
+.env
+.env.*
+
+# Zoom exports and generated workbooks are session data - they do not belong in
+# the repository, and a Zoom attendee CSV carries names, emails and phone numbers.
+*.xlsx
+*.csv
+*.zip
+!tests/**/*.csv

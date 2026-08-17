@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zoom Session Analyser</title>
+<style>
+  :root {
+    --acc:#0071e3; --link:#0066cc;
+    --bg:#f5f5f7; --card:#ffffff; --text:#1d1d1f; --body:#424245;
+    --dim:#6e6e73; --dim2:#86868b; --faint:#aeaeb2;
+    --line:#d2d2d7; --linehover:#aeaeb2; --hair:#e5e5e7; --rowline:#f2f2f4; --hover:#fafafa;
+    --zonebg:#fbfbfd; --panel:#f5f5f7; --tagbg:#ececf0;
+    --chipbg:rgba(0,0,0,.05); --chipbg2:rgba(0,0,0,.1); --accbg:rgba(0,113,227,.08);
+    --track:rgba(118,118,128,.12); --track2:#e9e9eb; --segon:#ffffff; --inputbg:#ffffff;
+    --pilldis:#e8e8ed; --pilldistx:#aeaeb2; --warntext:#b25000; --mkoff:#c7c7cc;
+    --focus:rgba(0,113,227,.15); --accsoft:rgba(0,113,227,.05);
+    --segshadow:0 1px 3px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04);
+    --rowpad:13px;
+  }
+  [data-theme="dark"] {
+    --acc:#0a84ff; --link:#409cff;
+    --bg:#0a0a0b; --card:#1c1c1e; --text:#f5f5f7; --body:#d1d1d6;
+    --dim:#98989d; --dim2:#8e8e93; --faint:#636366;
+    --line:#48484a; --linehover:#636366; --hair:#2c2c2e; --rowline:#26262a; --hover:#232326;
+    --zonebg:#212124; --panel:#2c2c2e; --tagbg:#3a3a3c;
+    --chipbg:rgba(255,255,255,.08); --chipbg2:rgba(255,255,255,.14); --accbg:rgba(10,132,255,.16);
+    --track:rgba(118,118,128,.24); --track2:#39393d; --segon:#636366; --inputbg:#1c1c1e;
+    --pilldis:#2c2c2e; --pilldistx:#636366; --warntext:#ffb340; --mkoff:#48484a;
+    --focus:rgba(10,132,255,.25); --accsoft:rgba(10,132,255,.08);
+    --segshadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); letter-spacing:-0.016em; -webkit-font-smoothing:antialiased;
+         font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Inter','Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;
+         transition:background .25s ease, color .25s ease; }
+  input::placeholder { color:var(--faint); }
+  input:focus { outline:none; }
+  a { color:var(--link); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  ::selection { background:rgba(0,113,227,0.25); }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .themebtn { position:fixed; top:18px; right:18px; z-index:20; width:38px; height:38px;
+        border-radius:50%; border:1px solid var(--hair); background:var(--card); cursor:pointer;
+        display:flex; align-items:center; justify-content:center; padding:0;
+        box-shadow:0 1px 4px rgba(0,0,0,.08); transition:background .25s ease; }
+  .themebtn svg { display:block; }
+  .themebtn .moon { display:block; }
+  .themebtn .sun { display:none; }
+  [data-theme="dark"] .themebtn .moon { display:none; }
+  [data-theme="dark"] .themebtn .sun { display:block; }
+
+  .wrap { max-width:980px; margin:0 auto; padding:44px 22px 96px; }
+  .h1 { font-size:40px; font-weight:600; letter-spacing:-0.018em; line-height:1.05; text-align:center; }
+  .sub { margin:10px auto 0; font-size:17px; line-height:1.5; color:var(--dim); max-width:620px;
+         text-wrap:pretty; text-align:center; }
+  .card { margin-top:14px; background:var(--card); border-radius:18px; padding:28px;
+          transition:background .25s ease; }
+  .card.first { margin-top:36px; padding:28px 28px 24px; }
+  .step { font-size:12px; font-weight:500; color:var(--dim2); letter-spacing:0; }
+  .steptitle { margin-top:2px; font-size:19px; font-weight:600; letter-spacing:-0.014em; }
+  .optbadge { margin-left:8px; font-size:11px; font-weight:500; color:var(--dim); background:var(--panel);
+              border-radius:980px; padding:3px 9px; vertical-align:3px; letter-spacing:0; }
+
+  .zones { margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:720px) { .zones { grid-template-columns:1fr; } }
+  .zone { position:relative; border:1.5px dashed var(--line); border-radius:14px; background:var(--zonebg);
+          padding:24px 20px; min-height:150px; cursor:pointer; display:flex; align-items:center;
+          justify-content:center; transition:border-color .2s ease, background .25s ease; }
+  .zone:hover { border-color:var(--linehover); }
+  .zone .empty { text-align:center; }
+  .zone .zt { margin-top:9px; font-size:15px; font-weight:600; letter-spacing:-0.01em; }
+  .zone .zs { margin-top:3px; font-size:13px; color:var(--dim); letter-spacing:-0.005em; }
+  .zone .zh { margin-top:9px; font-size:12px; color:var(--dim2); letter-spacing:0; }
+  .zone .ring { position:absolute; inset:-1.5px; border:2px solid var(--acc); border-radius:14px;
+                background:var(--accsoft); pointer-events:none; display:none; }
+  .zone.drag .ring { display:block; }
+  .chips { width:100%; display:flex; flex-direction:column; gap:10px; }
+  .chip { display:flex; align-items:center; gap:12px; width:100%; }
+  .chip .fic { width:38px; height:38px; border-radius:10px; background:var(--accbg);
+               display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .chip .fn { font-size:14px; font-weight:600; letter-spacing:-0.01em; white-space:nowrap;
+              overflow:hidden; text-overflow:ellipsis; }
+  .chip .fs { margin-top:2px; display:flex; align-items:center; gap:5px; font-size:12.5px;
+              color:var(--dim); letter-spacing:0; }
+  .chip .body { flex:1; min-width:0; }
+  .chip .rm { flex:0 0 auto; width:28px; height:28px; border-radius:50%; border:none;
+              background:var(--chipbg); cursor:pointer; display:flex; align-items:center;
+              justify-content:center; transition:background .15s; }
+  .chip .rm:hover { background:var(--chipbg2); }
+  .addmore { font-size:12px; color:var(--dim2); letter-spacing:0; text-align:center; }
+
+  .markers { margin-top:18px; display:grid; grid-template-columns:210px 210px 1fr; gap:14px; align-items:end; }
+  @media (max-width:720px) { .markers { grid-template-columns:1fr; align-items:stretch; } }
+  .mlabel { display:block; font-size:13px; font-weight:500; color:var(--body); letter-spacing:-0.005em; }
+  .minwrap { margin-top:6px; position:relative; }
+  .minwrap input { width:100%; padding:10px 44px 10px 12px; border:1px solid var(--line); border-radius:10px;
+        background:var(--inputbg); font-size:15px; color:var(--text); font-family:inherit; letter-spacing:-0.005em;
+        transition:border-color .15s, box-shadow .15s, background .25s ease; }
+  .minwrap input:focus { border-color:var(--acc); box-shadow:0 0 0 3.5px var(--focus); }
+  .minwrap .suf { position:absolute; right:12px; top:50%; transform:translateY(-50%); font-size:13px;
+        color:var(--dim2); pointer-events:none; letter-spacing:0; }
+  .mhelp { font-size:12.5px; line-height:1.5; color:var(--dim2); letter-spacing:0; padding-bottom:2px; text-wrap:pretty; }
+
+  .ctabtn { display:inline-flex; align-items:center; gap:5px; border:none; background:none; padding:0;
+        font-size:13px; font-weight:500; color:var(--link); cursor:pointer; font-family:inherit; letter-spacing:-0.005em; }
+  .ctabtn svg { transition:transform .2s ease; }
+  .ctabox { margin-top:10px; background:var(--panel); border-radius:12px; padding:14px 16px; font-size:13.5px;
+        line-height:1.55; color:var(--body); max-width:660px; letter-spacing:-0.005em; text-wrap:pretty; display:none; }
+  .ctabox b { font-weight:600; color:var(--text); }
+
+  .procrow { margin-top:22px; padding-top:18px; border-top:1px solid var(--hair); display:flex;
+        align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+  .tgl { position:relative; flex:0 0 auto; width:51px; height:31px; border:none; border-radius:980px;
+        cursor:pointer; padding:0; transition:background .25s ease; background:var(--track2); }
+  .tgl .knob { position:absolute; top:2px; left:2px; width:27px; height:27px; border-radius:50%;
+        background:#fff; box-shadow:0 3px 8px rgba(0,0,0,0.15), 0 1px 1px rgba(0,0,0,0.06);
+        transition:transform .25s cubic-bezier(0.25,0.1,0.25,1); }
+  .tgl.on { background:#34c759; }
+  .tgl.on .knob { transform:translateX(20px); }
+  .tgl.sm { width:36px; height:22px; }
+  .tgl.sm .knob { width:18px; height:18px; box-shadow:0 2px 6px rgba(0,0,0,0.15); }
+  .tgl.sm.on .knob { transform:translateX(14px); }
+  .tglrow { display:flex; align-items:center; gap:12px; }
+  .tgltitle { font-size:15px; letter-spacing:-0.01em; }
+  .tglsub { font-size:12.5px; color:var(--dim2); letter-spacing:0; }
+  .gorow { display:flex; align-items:center; gap:14px; }
+  .helper { font-size:13px; color:var(--dim2); letter-spacing:0; }
+  .pill { border:none; border-radius:980px; background:var(--acc); color:#fff; font-size:15px;
+        font-weight:500; padding:11px 24px; cursor:pointer; font-family:inherit; letter-spacing:-0.01em;
+        transition:background .15s; }
+  .pill:hover { background:color-mix(in srgb, var(--acc) 90%, #ffffff); }
+  .pill:active { background:color-mix(in srgb, var(--acc) 92%, #000000); }
+  .pill:disabled { background:var(--pilldis); color:var(--pilldistx); cursor:default; }
+  .pill.smallpill { font-size:13.5px; padding:9px 18px; display:inline-flex; align-items:center; gap:7px; letter-spacing:-0.005em; }
+  .pill.sec { background:var(--track); color:var(--text); }
+  .pill.sec:hover { background:var(--chipbg2); }
+  .pill.sec svg { stroke:var(--text); }
+
+  .errbox { margin-top:14px; background:var(--card); border-radius:14px; padding:16px 18px; font-size:14px;
+        line-height:1.5; color:var(--text); border-left:4px solid #ff3b30; display:none; }
+  .pairnote { margin-top:12px; font-size:12.5px; color:var(--warntext); letter-spacing:0; display:none; }
+
+  /* processing */
+  .proccard { margin-top:36px; background:var(--card); border-radius:18px; padding:72px 40px; display:flex;
+        flex-direction:column; align-items:center; }
+  .spin { animation:spin .8s linear infinite; display:block; }
+  .proct { margin-top:20px; font-size:20px; font-weight:600; letter-spacing:-0.015em; }
+  .procsub { margin-top:5px; font-size:13px; color:var(--dim2); letter-spacing:0; }
+  .steps { margin-top:26px; display:flex; flex-direction:column; min-width:270px; }
+  .strow { display:flex; align-items:center; gap:10px; padding:7px 0; }
+  .stic { width:18px; height:18px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .stpend { width:13px; height:13px; border:1.5px solid var(--line); border-radius:50%; }
+  .stlabel { font-size:14px; letter-spacing:-0.005em; color:var(--text); }
+  .stlabel.pending { color:var(--faint); }
+  .procfoot { margin-top:26px; font-size:12px; color:var(--dim2); letter-spacing:0; }
+
+  /* results */
+  .reshead { margin-top:36px; display:flex; align-items:flex-end; justify-content:space-between;
+        flex-wrap:wrap; gap:12px; }
+  .rest { font-size:24px; font-weight:600; letter-spacing:-0.016em; }
+  .resmeta { margin-top:4px; font-size:13px; color:var(--dim2); letter-spacing:0; }
+  .linkbtn { border:none; background:none; padding:0; font-size:13.5px; color:var(--link); cursor:pointer;
+        font-family:inherit; letter-spacing:-0.005em; }
+  .linkbtn:hover { text-decoration:underline; }
+  .tiles { margin-top:18px; display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  @media (max-width:720px) { .tiles { grid-template-columns:1fr 1fr; } }
+  .tile { background:var(--card); border-radius:14px; padding:16px 18px; transition:background .25s ease; }
+  .tile .num { font-size:27px; font-weight:600; letter-spacing:-0.02em; }
+  .tile .pct { font-size:13px; color:var(--dim2); margin-left:6px; }
+  .tile .lbl { margin-top:2px; font-size:13px; color:var(--dim); letter-spacing:0; }
+  .notice { margin-top:12px; background:var(--card); border-radius:14px; padding:14px 18px; font-size:13.5px;
+        line-height:1.5; color:var(--body); border-left:4px solid #ff9500; }
+  .notice.bad { border-left-color:#ff3b30; }
+  .notice b { color:var(--text); }
+  .notice ul { margin:6px 0 0; padding-left:18px; }
+  .filterrow { margin-top:22px; display:flex; align-items:center; justify-content:space-between;
+        flex-wrap:wrap; gap:12px; }
+  .segs { display:inline-flex; flex-wrap:wrap; gap:2px; background:var(--track);
+        border-radius:9px; padding:2px; }
+  .seg { padding:5px 12px; border-radius:7px; font-size:13px; font-weight:500; border:none;
+        background:transparent; color:var(--body); cursor:pointer; transition:all .15s ease;
+        white-space:nowrap; font-family:inherit; letter-spacing:-0.005em; }
+  .seg .ct { margin-left:5px; color:var(--dim2); font-weight:400; }
+  .seg.on { background:var(--segon); box-shadow:var(--segshadow); color:var(--text); }
+  .tools { display:flex; align-items:center; gap:14px; }
+  .dbg { display:flex; align-items:center; gap:7px; }
+  .dbg span { font-size:13px; color:var(--body); letter-spacing:-0.005em; }
+  .search { display:flex; align-items:center; gap:6px; background:var(--track);
+        border-radius:9px; padding:0 10px; height:32px; width:200px; }
+  .search input { flex:1; min-width:0; border:none; background:none; font-size:13px; color:var(--text);
+        font-family:inherit; padding:0; letter-spacing:-0.005em; }
+
+  .tbl { margin-top:12px; background:var(--card); border-radius:16px; overflow:hidden;
+        transition:background .25s ease; }
+  .thead { display:flex; gap:16px; padding:12px 20px 9px; font-size:12.5px; font-weight:500;
+        color:var(--dim); letter-spacing:0; }
+  .c-att { flex:1 1 240px; min-width:200px; }
+  .c-ph { width:140px; flex:0 0 auto; }
+  .c-cat { width:150px; flex:0 0 auto; }
+  .c-pr, .c-ct { width:86px; flex:0 0 auto; text-align:center; }
+  .c-msg { width:70px; flex:0 0 auto; text-align:right; }
+  .trow { border-top:1px solid var(--rowline); }
+  .tmain { display:flex; gap:16px; align-items:center; padding:var(--rowpad) 20px; cursor:pointer;
+        transition:background .12s; }
+  .tmain:hover { background:var(--hover); }
+  .tname { font-size:14.5px; font-weight:500; letter-spacing:-0.008em; }
+  .temail { margin-top:1px; font-size:12.5px; color:var(--dim2); letter-spacing:0; }
+  .tdbg { margin-top:3px; font-size:11.5px; color:var(--faint); font-family:ui-monospace,'SF Mono',Menlo,monospace; letter-spacing:0; }
+  .tph { font-size:13.5px; color:var(--body); font-variant-numeric:tabular-nums; letter-spacing:0; }
+  .catcell { display:flex; align-items:center; gap:7px; }
+  .dot { width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+  .catname { font-size:13.5px; letter-spacing:-0.005em; }
+  .mark { font-size:14px; font-weight:600; }
+  .mark.on { color:#34c759; }
+  .mark.off { color:var(--mkoff); }
+  .msgcell { display:flex; align-items:center; justify-content:flex-end; gap:6px; }
+  .msgn { font-size:13.5px; color:var(--body); }
+  .chev { transition:transform .2s ease; }
+  .texp { padding:12px 20px 16px; background:var(--hover); border-top:1px solid var(--rowline); }
+  .nochat { font-size:13px; color:var(--dim2); letter-spacing:0; }
+  .lines { display:flex; flex-direction:column; gap:6px; }
+  .line { display:flex; align-items:baseline; gap:10px; }
+  .ltxt { font-size:14px; line-height:1.45; letter-spacing:-0.005em; color:var(--body); min-width:0; }
+  .ltxt.removed { color:var(--faint); text-decoration:line-through; }
+  .ltag { flex:0 0 auto; font-size:10.5px; font-weight:500; color:var(--dim); background:var(--tagbg);
+        border-radius:4px; padding:2px 6px; letter-spacing:0.01em; white-space:nowrap; }
+  .tflags { margin-top:10px; font-size:12.5px; color:var(--dim2); letter-spacing:0; }
+  .tbasis { margin-top:6px; font-size:12.5px; color:var(--dim); letter-spacing:0; }
+  .norows { padding:44px; text-align:center; font-size:14px; color:var(--dim2); border-top:1px solid var(--rowline); }
+  .resfoot { margin-top:12px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+        font-size:12.5px; color:var(--dim2); letter-spacing:0; padding:0 4px; }
+</style>
+</head>
+<body>
+<button type="button" class="themebtn" id="themeBtn" title="Switch light / dark">
+  <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"></path></svg>
+  <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f5f5f7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.9 4.9l1.4 1.4"></path><path d="M17.7 17.7l1.4 1.4"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.9 19.1l1.4-1.4"></path><path d="M17.7 6.3l1.4-1.4"></path></svg>
+</button>
+<div class="wrap">
+  <div class="h1">Zoom Session Analyser</div>
+  <div class="sub">Attendee report and saved chat in. Names, emails, engagement categories,
+    and a cleaned chat export out.</div>
+
+  <!-- ============================ SETUP ============================ -->
+  <div id="viewSetup">
+    <div class="card first">
+      <div class="step">Step 1</div>
+      <div class="steptitle">Session files</div>
+      <div class="zones">
+        <div class="zone" id="zoneRep">
+          <input type="file" id="pickRep" multiple accept=".csv" style="display:none">
+          <div class="empty" id="emptyRep">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h5"></path></svg>
+            <div class="zt">Attendee report</div>
+            <div class="zs">Drop the CSV export here, or click to browse</div>
+            <div class="zh">Zoom &rarr; Reports &rarr; Usage &rarr; Attendee report</div>
+          </div>
+          <div class="chips" id="chipsRep" style="display:none"></div>
+          <div class="ring"></div>
+        </div>
+        <div class="zone" id="zoneChat">
+          <input type="file" id="pickChat" multiple accept=".txt" style="display:none">
+          <div class="empty" id="emptyChat">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>
+            <div class="zt">Saved chat</div>
+            <div class="zs">Drop the .txt file here, or click to browse</div>
+            <div class="zh">meeting_saved_chat.txt &middot; in the meeting folder</div>
+          </div>
+          <div class="chips" id="chipsChat" style="display:none"></div>
+          <div class="ring"></div>
+        </div>
+      </div>
+      <div class="pairnote" id="pairnote">Several rooms: reports and chat files are paired
+        <b>in the order added</b> &mdash; 1st report + 1st chat = Room 1, and so on. One chat file
+        per report, or none.</div>
+    </div>
+
+    <div class="card">
+      <div class="step">Step 2</div>
+      <div class="steptitle">Session markers<span class="optbadge">Optional</span></div>
+      <div class="markers">
+        <div>
+          <label class="mlabel" for="pricing">Pricing revealed at</label>
+          <div class="minwrap">
+            <input type="text" inputmode="numeric" id="pricing" placeholder="e.g. 164" maxlength="3">
+            <span class="suf">min</span>
+          </div>
+        </div>
+        <div>
+          <label class="mlabel" for="cta">CTA delivered at</label>
+          <div class="minwrap">
+            <input type="text" inputmode="numeric" id="cta" placeholder="e.g. 202" maxlength="3">
+            <span class="suf">min</span>
+          </div>
+        </div>
+        <div class="mhelp">Minutes from session start. Categories work without these &mdash; offsets
+          enrich the pricing and CTA evidence with a 10-minute window.</div>
+      </div>
+      <div style="margin-top:16px">
+        <button type="button" class="ctabtn" id="ctaToggle">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" id="ctaChev"><path d="M6 9l6 6 6-6"></path></svg>
+          What is the CTA?
+        </button>
+        <div class="ctabox" id="ctaBox">The CTA is the moment the host tells attendees what to do
+          next &mdash; enrol, pay, book a slot. Staying through it is a behavioural signal: someone
+          who sat through the pitch is behaving differently from someone who left after the free
+          demos. <b>Present at pricing</b> works the same way &mdash; being in the room when the
+          price was announced says something the chat alone doesn&rsquo;t.</div>
+      </div>
+      <div class="procrow">
+        <div class="tglrow">
+          <button type="button" class="tgl" id="tglDebug" role="switch" aria-checked="false"><span class="knob"></span></button>
+          <div>
+            <div class="tgltitle">Include debug columns</div>
+            <div class="tglsub">basis, room, attended, minutes, raw message count</div>
+          </div>
+        </div>
+        <div class="gorow">
+          <div class="helper" id="helper">Add the attendee report to process</div>
+          <button type="button" class="pill" id="go" disabled>Process session</button>
+        </div>
+      </div>
+    </div>
+    <div class="errbox" id="errbox"></div>
+  </div>
+
+  <!-- ========================== PROCESSING ========================== -->
+  <div id="viewProc" style="display:none">
+    <div class="proccard">
+      <svg class="spin" width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="var(--acc)" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="44 16"></circle></svg>
+      <div class="proct">Categorising session</div>
+      <div class="procsub" id="procsub"></div>
+      <div class="steps" id="steps"></div>
+      <div class="procfoot">Nothing leaves this machine</div>
+    </div>
+  </div>
+
+  <!-- =========================== RESULTS =========================== -->
+  <div id="viewResults" style="display:none">
+    <div class="reshead">
+      <div>
+        <div class="rest">Session results</div>
+        <div class="resmeta" id="resmeta"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <button type="button" class="linkbtn" id="newSession">New session</button>
+        <button type="button" class="pill sec smallpill" id="dlCsv">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M7 10l5 5 5-5"></path><path d="M12 15V3"></path></svg>
+          Download CSV
+        </button>
+        <button type="button" class="pill smallpill" id="dl">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M7 10l5 5 5-5"></path><path d="M12 15V3"></path></svg>
+          Download XLSX
+        </button>
+      </div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div id="notices"></div>
+    <div class="filterrow">
+      <div class="segs" id="segs"></div>
+      <div class="tools">
+        <div class="dbg">
+          <button type="button" class="tgl sm" id="tglDebug2" role="switch" aria-checked="false"><span class="knob"></span></button>
+          <span>Debug detail</span>
+        </div>
+        <div class="search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+          <input id="search" placeholder="Name or email">
+        </div>
+      </div>
+    </div>
+    <div class="tbl">
+      <div class="thead">
+        <div class="c-att">Attendee</div>
+        <div class="c-ph">Phone</div>
+        <div class="c-cat">Category</div>
+        <div class="c-pr">At pricing</div>
+        <div class="c-ct">To CTA</div>
+        <div class="c-msg">Chat</div>
+      </div>
+      <div id="tbody"></div>
+    </div>
+    <div class="resfoot">
+      <span id="footerLine"></span>
+      <button type="button" class="linkbtn" id="dlRemoved" style="font-size:12.5px;letter-spacing:0">Download removed chat (.txt)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtSize = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+const nfmt = n => Number(n || 0).toLocaleString();
+
+const CAT_ORDER = ["purchase intent high", "strong interest", "moderate interest",
+  "information seeking", "no clear intent", "negative engagement", "non chatted", "non attended"];
+const CAT_DOT = {
+  "purchase intent high": "#ff3b30", "strong interest": "#ff9500", "moderate interest": "#ffcc00",
+  "information seeking": "#5ac8fa", "no clear intent": "#8e8e93", "negative engagement": "#af52de",
+  "non chatted": "#d2d2d7", "non attended": "#c7c7cc"
+};
+const FILE_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h5"></path></svg>';
+const CHAT_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>';
+const CHECK_SVG = '<svg width="13" height="13" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="#34c759"></circle><path d="M6 10.2l2.6 2.6L14 7.6" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+const CHECK18 = '<svg width="18" height="18" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="#34c759"></circle><path d="M6 10.2l2.6 2.6L14 7.6" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+const SPIN16 = '<svg class="spin" width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="var(--acc)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="44 16"></circle></svg>';
+const X_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#98989d" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>';
+const STEP_LABELS = ['Parsing attendee report', 'Reading saved chat', 'Matching identities', 'Scoring engagement'];
+
+const S = { repFiles: [], chatFiles: [], debug: false, job: null, summary: null, preflight: null,
+            notes: [], filter: '', search: '', expanded: null, rowsData: null, timer: null };
+
+/* ---------------- theme ---------------- */
+function applyTheme(t) {
+  if (t === 'dark') document.documentElement.dataset.theme = 'dark';
+  else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem('zcc-theme', t); } catch (e) {}
+}
+$('themeBtn').onclick = () =>
+  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+try { applyTheme(localStorage.getItem('zcc-theme') || 'light'); } catch (e) {}
+
+/* ---------------- setup: file zones ---------------- */
+function wireZone(zoneId, pickId, arr, re) {
+  const zone = $(zoneId), pick = $(pickId);
+  const add = fl => {
+    for (const f of fl) if (re.test(f.name)) arr.push(f);
+    renderZones();
+  };
+  zone.onclick = () => pick.click();
+  pick.onchange = () => { add(pick.files); pick.value = ''; };
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add('drag'); };
+  zone.ondragleave = () => zone.classList.remove('drag');
+  zone.ondrop = e => { e.preventDefault(); zone.classList.remove('drag'); add(e.dataTransfer.files); };
+}
+function chipHtml(f, i, kind) {
+  return `<div class="chip">
+    <div class="fic">${kind === 'rep' ? FILE_SVG : CHAT_SVG}</div>
+    <div class="body">
+      <div class="fn">${esc(f.name)}</div>
+      <div class="fs">${CHECK_SVG}<span>Ready &middot; ${fmtSize(f.size)}</span></div>
+    </div>
+    <button type="button" class="rm" data-k="${kind}" data-i="${i}" title="Remove file">${X_SVG}</button>
+  </div>`;
+}
+function renderZones() {
+  const zr = { rep: [S.repFiles, 'chipsRep', 'emptyRep'], chat: [S.chatFiles, 'chipsChat', 'emptyChat'] };
+  for (const kind in zr) {
+    const [arr, chipsId, emptyId] = zr[kind];
+    const chips = $(chipsId);
+    if (arr.length) {
+      chips.style.display = '';
+      $(emptyId).style.display = 'none';
+      chips.innerHTML = arr.map((f, i) => chipHtml(f, i, kind)).join('') +
+        `<div class="addmore">click to add another room&rsquo;s file</div>`;
+      chips.querySelectorAll('.rm').forEach(b => b.onclick = e => {
+        e.stopPropagation();
+        zr[b.dataset.k][0].splice(+b.dataset.i, 1);
+        renderZones();
+      });
+    } else {
+      chips.style.display = 'none';
+      $(emptyId).style.display = '';
+    }
+  }
+  $('pairnote').style.display = S.repFiles.length > 1 ? '' : 'none';
+  const n = S.repFiles.length;
+  $('go').disabled = n === 0;
+  $('helper').textContent =
+    n === 0 ? 'Add the attendee report to process'
+    : (S.chatFiles.length === 0 ? 'No chat file — everyone will publish as non-chatted'
+    : 'Ready — output stays on this machine');
+}
+wireZone('zoneRep', 'pickRep', S.repFiles, /\.csv$/i);
+wireZone('zoneChat', 'pickChat', S.chatFiles, /\.txt$/i);
+
+/* ---------------- setup: markers + toggles ---------------- */
+for (const id of ['pricing', 'cta'])
+  $(id).addEventListener('input', () => { $(id).value = $(id).value.replace(/[^0-9]/g, '').slice(0, 3); });
+$('ctaToggle').onclick = () => {
+  const open = $('ctaBox').style.display !== 'block';
+  $('ctaBox').style.display = open ? 'block' : 'none';
+  $('ctaChev').style.transform = open ? 'rotate(180deg)' : '';
+};
+function setDebug(v) {
+  S.debug = v;
+  for (const id of ['tglDebug', 'tglDebug2']) {
+    $(id).classList.toggle('on', v);
+    $(id).setAttribute('aria-checked', v);
+  }
+  if (S.rowsData) renderRows();
+}
+$('tglDebug').onclick = () => setDebug(!S.debug);
+$('tglDebug2').onclick = () => setDebug(!S.debug);
+
+/* ---------------- process ---------------- */
+function show(view) {
+  $('viewSetup').style.display = view === 'setup' ? '' : 'none';
+  $('viewProc').style.display = view === 'proc' ? '' : 'none';
+  $('viewResults').style.display = view === 'results' ? '' : 'none';
+}
+$('go').onclick = async () => {
+  $('errbox').style.display = 'none';
+  const fd = new FormData();
+  S.repFiles.forEach(f => fd.append('att_files', f, f.name));
+  S.chatFiles.forEach(f => fd.append('chat_files', f, f.name));
+  fd.append('pricing', $('pricing').value);
+  fd.append('cta', $('cta').value);
+  if (S.debug) fd.append('extras', 'on');
+  $('procsub').textContent = S.repFiles.concat(S.chatFiles).map(f => f.name).join('  +  ');
+  renderSteps(0);
+  show('proc');
+  try {
+    const r = await fetch('/api/process', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!j.job) throw new Error(j.error || 'upload rejected');
+    S.job = j.job;
+    poll();
+  } catch (e) {
+    show('setup');
+    showError('Upload failed: ' + esc(e.message || e));
+  }
+};
+function showError(html) {
+  $('errbox').innerHTML = html;
+  $('errbox').style.display = 'block';
+}
+function stepIndex(progress) {
+  let idx = 1;
+  for (const p of progress || []) {
+    if (/attribut/.test(p)) idx = Math.max(idx, 2);
+    if (/scoring/.test(p)) idx = Math.max(idx, 3);
+    if (/audit|writing/.test(p)) idx = Math.max(idx, 4);
+  }
+  return idx;
+}
+function renderSteps(idx) {
+  $('steps').innerHTML = STEP_LABELS.map((t, i) => {
+    const done = idx > i + 1, active = idx === i + 1;
+    const icon = done ? CHECK18 : (active ? SPIN16 : '<div class="stpend"></div>');
+    return `<div class="strow"><div class="stic">${icon}</div>
+      <div class="stlabel${(!done && !active) ? ' pending' : ''}">${t}</div></div>`;
+  }).join('');
+}
+function poll() {
+  clearInterval(S.timer);
+  S.timer = setInterval(async () => {
+    let j;
+    try {
+      j = await (await fetch('/api/status/' + S.job)).json();
+    } catch (e) { return; }
+    if (j.state === 'running') { renderSteps(stepIndex(j.progress)); return; }
+    clearInterval(S.timer);
+    S.summary = j.summary; S.preflight = j.preflight; S.notes = j.notes || [];
+    if (j.state === 'error') {
+      show('setup');
+      showError('<b>Could not process.</b> ' + esc(j.error || 'unknown error'));
+      return;
+    }
+    renderResults(j);            // 'done' or 'blocked'
+  }, 900);
+}
+
+/* ---------------- results ---------------- */
+$('newSession').onclick = () => {
+  S.repFiles.length = 0; S.chatFiles.length = 0;
+  S.job = null; S.summary = null; S.rowsData = null; S.filter = ''; S.search = ''; S.expanded = null;
+  $('pricing').value = ''; $('cta').value = ''; $('search').value = '';
+  setDebug(false);
+  renderZones();
+  show('setup');
+  window.scrollTo({ top: 0 });
+};
+$('dl').onclick = () => { if (S.job) location.href = '/api/download/' + S.job; };
+$('dlCsv').onclick = () => { if (S.job) location.href = '/api/csv/' + S.job; };
+$('dlRemoved').onclick = () => { if (S.job) location.href = '/api/removed/' + S.job; };
+
+function renderResults(j) {
+  const s = S.summary || {};
+  const blocked = j.state === 'blocked';
+  $('dl').style.display = blocked ? 'none' : '';
+  $('dlCsv').style.display = blocked ? 'none' : '';
+  const files = s.files_line || '';
+  const meta = [s.session_date, files].filter(Boolean).join(' · ')
+    + ($('pricing').value ? ' · pricing @ ' + $('pricing').value + ' min' : '')
+    + ($('cta').value ? ' · CTA @ ' + $('cta').value + ' min' : '');
+  $('resmeta').textContent = meta;
+
+  const total = s.rows || 0;
+  const pct = n => total ? Math.round(n / total * 100) + '%' : '';
+  const tiles = [
+    { num: nfmt(total), pct: '', lbl: 'In attendee report' },
+    { num: nfmt(s.chatted), pct: pct(s.chatted), lbl: 'Matched to chat' },
+    { num: s.have_offsets ? nfmt(s.pricing_yes) : '—', pct: s.have_offsets ? pct(s.pricing_yes) : '', lbl: 'Present at pricing' },
+    { num: s.have_offsets ? nfmt(s.cta_yes) : '—', pct: s.have_offsets ? pct(s.cta_yes) : '', lbl: 'Stayed to CTA' },
+  ];
+  $('tiles').innerHTML = tiles.map(t => `<div class="tile">
+    <span class="num">${t.num}</span>${t.pct ? `<span class="pct">${t.pct}</span>` : ''}
+    <div class="lbl">${t.lbl}</div></div>`).join('');
+
+  // notices: gate block, preflight FAIL/WARN, pipeline warnings
+  let nh = '';
+  if (blocked)
+    nh += `<div class="notice bad"><b>Output blocked.</b> ${esc(j.error || '')}</div>`;
+  const pf = (S.preflight || []).filter(v => v.level !== 'ok');
+  if (pf.length)
+    nh += `<div class="notice"><b>Pre-flight findings</b><ul>` + pf.map(v =>
+      `<li><b>${esc(v.room)}</b> (${v.level}): ${esc(v.messages.join(' · '))}</li>`).join('') + `</ul></div>`;
+  const warns = (s.warnings || []);
+  if (warns.length)
+    nh += `<div class="notice"><b>Warnings</b><ul>` + warns.map(w => `<li>${esc(w)}</li>`).join('') + `</ul></div>`;
+  if ((s.phone_col_missing || []).length)
+    nh += `<div class="notice">No phone column in: ${esc(s.phone_col_missing.join(', '))} &mdash; those phone cells are blank because Zoom did not export them.</div>`;
+  $('notices').innerHTML = nh;
+
+  renderSegs();
+  show('results');
+  fetchRows();
+}
+function renderSegs() {
+  const counts = (S.summary || {}).category_counts || {};
+  const segs = [{ label: 'All', key: '', count: S.summary.rows }]
+    .concat(CAT_ORDER.filter(c => counts[c]).map(c => ({ label: c, key: c, count: counts[c] })));
+  $('segs').innerHTML = segs.map(g =>
+    `<button type="button" class="seg${S.filter === g.key ? ' on' : ''}" data-k="${esc(g.key)}">${esc(g.label)}<span class="ct">${nfmt(g.count)}</span></button>`).join('');
+  $('segs').querySelectorAll('.seg').forEach(b => b.onclick = () => {
+    S.filter = b.dataset.k; S.expanded = null;
+    renderSegs(); fetchRows();
+  });
+}
+let searchT = null;
+$('search').addEventListener('input', () => {
+  clearTimeout(searchT);
+  searchT = setTimeout(() => { S.search = $('search').value; S.expanded = null; fetchRows(); }, 300);
+});
+async function fetchRows() {
+  const u = new URL('/api/rows/' + S.job, location.origin);
+  if (S.filter) u.searchParams.set('cat', S.filter);
+  if (S.search.trim()) u.searchParams.set('q', S.search.trim());
+  u.searchParams.set('limit', '120');
+  try {
+    S.rowsData = await (await fetch(u)).json();
+  } catch (e) { S.rowsData = { total: 0, rows: [] }; }
+  renderRows();
+}
+function markCell(v) {
+  if (v === true) return '<span class="mark on">✓</span>';
+  return '<span class="mark off">—</span>';
+}
+function renderRows() {
+  const d = S.rowsData || { total: 0, rows: [] };
+  const tb = $('tbody');
+  if (!d.rows.length) {
+    tb.innerHTML = `<div class="norows">No attendees match.</div>`;
+  } else {
+    tb.innerHTML = d.rows.map((r, i) => {
+      const open = S.expanded === i;
+      const dbg = S.debug ? `<div class="tdbg">${esc([r.room || '—',
+        (r.att === 'Yes' ? 'attended' : 'no-show'), r.min + ' min', r.msgs + ' raw msgs'].join(' · '))}</div>` : '';
+      let exp = '';
+      if (open) {
+        const rel = (r.rel || []).map(t => `<div class="line"><span class="ltxt">${esc(t)}</span></div>`).join('');
+        const del = (r.del || []).map(t => `<div class="line"><span class="ltxt removed">${esc(t)}</span><span class="ltag">removed</span></div>`).join('');
+        const body = (r.rel.length || r.del.length)
+          ? `<div class="lines">${rel}${del}</div>`
+          : `<div class="nochat">No chat messages &mdash; categorised from attendance pattern alone.</div>`;
+        const flags = `Present at pricing ${r.pr === true ? '✓' : '—'}
+          &nbsp;·&nbsp; Stayed to CTA ${r.ct === true ? '✓' : '—'}
+          &nbsp;·&nbsp; ${r.min} min in session`;
+        const basis = S.debug && r.basis ? `<div class="tbasis">Basis: ${esc(r.basis)}</div>` : '';
+        exp = `<div class="texp">${body}<div class="tflags">${flags}</div>${basis}</div>`;
+      }
+      return `<div class="trow">
+        <div class="tmain" data-i="${i}">
+          <div class="c-att">
+            <div class="tname">${esc(r.n) || '&mdash;'}</div>
+            <div class="temail">${esc(r.e)}</div>${dbg}
+          </div>
+          <div class="c-ph tph">${esc(r.p) || '—'}</div>
+          <div class="c-cat catcell">
+            <span class="dot" style="background:${CAT_DOT[r.cat] || '#8e8e93'}"></span>
+            <span class="catname">${esc(r.cat)}</span>
+          </div>
+          <div class="c-pr">${markCell(r.pr)}</div>
+          <div class="c-ct">${markCell(r.ct)}</div>
+          <div class="c-msg msgcell">
+            <span class="msgn">${r.msgs ? nfmt(r.msgs) : '—'}</span>
+            <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#aeaeb2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(${open ? 180 : 0}deg)"><path d="M6 9l6 6 6-6"></path></svg>
+          </div>
+        </div>${exp}</div>`;
+    }).join('');
+    tb.querySelectorAll('.tmain').forEach(el => el.onclick = () => {
+      const i = +el.dataset.i;
+      S.expanded = S.expanded === i ? null : i;
+      renderRows();
+    });
+  }
+  const s = S.summary || {};
+  const shown = d.rows.length;
+  const more = d.total > shown ? `showing first ${nfmt(shown)} of ${nfmt(d.total)} · refine with search · ` : '';
+  const a = s.attribution || {};
+  $('footerLine').textContent =
+    `${more}${nfmt(s.chatted)} of ${nfmt(s.rows)} attendees matched to chat · ` +
+    `${nfmt(a.msgs_dropped)} msgs (${a.msgs_dropped_pct}%) dropped, never guessed · processed locally`;
+}
+renderZones();
+</script>
+</body>
+</html>

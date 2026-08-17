@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+xlsxwriter>=3.2
+# openpyxl is only needed to run tests/test_golden.py (reads the published xlsx)
+openpyxl>=3.1
