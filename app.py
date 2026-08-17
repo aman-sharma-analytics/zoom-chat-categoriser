@@ -8,6 +8,7 @@ http://127.0.0.1:8010
 Flow: upload session zip(s) or room files -> pre-flight verdicts -> process ->
 summary + download. A failed chat-clean audit BLOCKS the download by design.
 """
+import gzip
 import os
 import tempfile
 import threading
@@ -113,9 +114,21 @@ async def process(files: list[UploadFile] | None = File(None),
                   pricing: str = Form(""), cta: str = Form(""),
                   extras: str = Form("")):
     async def _read(fl):
+        """Read each upload, inflating it if the browser gzipped it.
+
+        The page compresses before sending because a hosted request body is capped
+        at 4.5 MB and one real room is 7.4 MB of plain text. Detection is by the
+        gzip magic number rather than by the filename, so an uncompressed upload --
+        from an API caller, an older browser, or curl -- still works untouched."""
         out = []
         for f in fl or []:
-            out.append((f.filename or "upload", await f.read()))
+            name = f.filename or "upload"
+            data = await f.read()
+            if data[:2] == b"\x1f\x8b":
+                data = gzip.decompress(data)
+                if name.endswith(".gz"):
+                    name = name[:-3]
+            out.append((name, data))
         return out
 
     inputs = await _read(files)

@@ -505,19 +505,59 @@ function show(view) {
   $('viewProc').style.display = view === 'proc' ? '' : 'none';
   $('viewResults').style.display = view === 'results' ? '' : 'none';
 }
+// Gzip each file in the browser before it goes on the wire.
+//
+// Locally this is pointless; deployed it is the difference between working and
+// not. A serverless request body is capped at 4.5 MB, and one real room -- a
+// 3.1 MB attendee CSV plus a 4.3 MB saved chat -- is 7.4 MB, so the upload was
+// rejected with HTTP 413 before app.py ever saw it. Zoom exports are plain text
+// and compress to about 18% of their size, which turns 7.4 MB into ~1.4 MB.
+//
+// The server sniffs the gzip magic bytes and inflates, so an uncompressed upload
+// still works and nothing about the API changed. If the browser has no
+// CompressionStream (Safari before 16.4), the file is sent as-is: slower to fail
+// on a big session, but never wrong.
+async function gz(file) {
+  if (!('CompressionStream' in window)) return file;
+  try {
+    const packed = await new Response(
+      file.stream().pipeThrough(new CompressionStream('gzip'))).blob();
+    return new File([packed], file.name + '.gz', { type: 'application/gzip' });
+  } catch (e) {
+    return file;                       // compression is an optimisation, not a gate
+  }
+}
+
 $('go').onclick = async () => {
   $('errbox').style.display = 'none';
-  const fd = new FormData();
-  S.repFiles.forEach(f => fd.append('att_files', f, f.name));
-  S.chatFiles.forEach(f => fd.append('chat_files', f, f.name));
-  fd.append('pricing', $('pricing').value);
-  fd.append('cta', $('cta').value);
-  if (S.debug) fd.append('extras', 'on');
   $('procsub').textContent = S.repFiles.concat(S.chatFiles).map(f => f.name).join('  +  ');
   renderSteps(0);
   show('proc');
   try {
+    const fd = new FormData();
+    const reps = await Promise.all(S.repFiles.map(gz));
+    const chats = await Promise.all(S.chatFiles.map(gz));
+    reps.forEach(f => fd.append('att_files', f, f.name));
+    chats.forEach(f => fd.append('chat_files', f, f.name));
+    fd.append('pricing', $('pricing').value);
+    fd.append('cta', $('cta').value);
+    if (S.debug) fd.append('extras', 'on');
+    const sent = reps.concat(chats).reduce((n, f) => n + f.size, 0);
     const r = await fetch('/api/process', { method: 'POST', body: fd });
+    // A 413 from the platform is plain text, not JSON. Parsing it produced
+    // "Unexpected token 'R', "Request En"... is not valid JSON", which told the
+    // user nothing about the actual problem.
+    if (!r.ok) {
+      const body = (await r.text()).trim();
+      if (r.status === 413 || /too large/i.test(body)) {
+        throw new Error('the upload is too big for the hosted version (' +
+          (sent / 1048576).toFixed(1) + ' MB compressed, limit 4.5 MB). ' +
+          'Process fewer rooms at a time, or run the tool locally where there is no limit.');
+      }
+      let msg = body.split('\n')[0] || ('HTTP ' + r.status);
+      try { msg = JSON.parse(body).error || msg; } catch (_) {}
+      throw new Error(msg);
+    }
     const j = await r.json();
     if (!j.job) throw new Error(j.error || 'upload rejected');
     S.job = j.job;
