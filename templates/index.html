@@ -554,6 +554,14 @@ $('go').onclick = async () => {
           (sent / 1048576).toFixed(1) + ' MB compressed, limit 4.5 MB). ' +
           'Process fewer rooms at a time, or run the tool locally where there is no limit.');
       }
+      // On the hosted copy the processing happens inside this request, so the
+      // platform's 60-second ceiling shows up here as a gateway timeout. Saying
+      // "504" to somebody who just uploaded six rooms explains nothing.
+      if (r.status === 504 || r.status === 502) {
+        throw new Error('the hosted version ran out of time on this session ' +
+          '(60 second limit). Process fewer rooms at a time, or run the tool ' +
+          'locally where there is no time limit.');
+      }
       let msg = body.split('\n')[0] || ('HTTP ' + r.status);
       try { msg = JSON.parse(body).error || msg; } catch (_) {}
       throw new Error(msg);
