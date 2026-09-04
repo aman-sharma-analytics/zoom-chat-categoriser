@@ -8,3 +8,22 @@ run.bat
 *.xlsx
 *.csv
 *.zip
+
+# .python-version pins 3.12.10, which is right for pyenv here and matches the
+# PYTHON_VERSION in render.yaml, but it BREAKS the Vercel build: Vercel reads this
+# file and hands the exact patch version to uv, which cannot provision it -
+#
+#   error: No interpreter found for Python 3.12.10 in managed installations
+#
+# and a failed build leaves no function behind, so every path answers 404 at the
+# edge. Vercel was deploying fine without this file; keeping it out of the upload
+# restores that and lets Vercel pick its own 3.12 runtime.
+.python-version
+
+# Local-only and docs; none of it is needed by the function and vercel.json's
+# includeFiles already limits the bundle to app.py, templates/, config/ and core/.
+docs/
+render.yaml
+*.md
+*.bak_*
+_backups_*/
