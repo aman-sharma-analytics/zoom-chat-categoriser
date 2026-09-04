@@ -112,6 +112,13 @@ def build_room_attribution(recs, meta, blocks):
         hit = False
         left = []
         g = datetime.timedelta(seconds=GRACE)
+        # Candidates we cannot place in time AT ALL -- no segment, every segment unparsed,
+        # or every segment inverted (Zoom exports those with a negative duration of its
+        # own). Their absence is UNKNOWN, not established, so they can never be ruled out
+        # by a presence window. Without this a corrupt twin silently handed its namesake's
+        # messages to the other contact: a guess, in the one place the design forbids one.
+        blind = set(k for k, ivs in cands.items()
+                    if not any(iv and iv[0] <= iv[1] for iv in ivs))
         for b in blist:
             t = (base + datetime.timedelta(seconds=b['sec'])) if (base and b['sec'] is not None) else None
             if t is None:
@@ -120,7 +127,7 @@ def build_room_attribution(recs, meta, blocks):
                 continue
             live = [k for k, ivs in cands.items()
                     if any(iv and iv[0] - g <= t <= iv[1] + g for iv in ivs)]
-            if len(live) == 1:
+            if len(live) == 1 and not (blind - {live[0]}):
                 by_key.setdefault(live[0], []).append(b)
                 S['msg_time_resolved'] += len(b['lines'])
                 hit = True

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """XLSX writer for the categoriser deliverable.
 
-7 columns in the agreed order (extras optional, off by default). Written with
+6 columns in the agreed order (extras optional, off by default). Written with
 xlsxwriter and constant_memory=False -- that produces a real shared-strings table;
 inline-strings mode bloats the file and some tools mishandle it.
 
@@ -23,17 +23,33 @@ def clean(v):
     return ILLEGAL.sub('', v) if isinstance(v, str) else v
 
 
+# "Session Engagement" is the engine's v4.6 name for this column (renamed from
+# "Engagement Category" on 2026-09-01); the published Lead Score files use it too.
+# The dict KEY stays 'category' -- that is an internal contract the UI and the row
+# APIs depend on, and renaming it would break /api/rows.
+# The agreed 6-column deliverable (2026-09-03). Activity Date and Session Name are
+# per-session values the user types once and are repeated on every row, so a run can be
+# appended straight onto a master sheet. Phone Number carries the dial code inline as
+# '+cc-number'; the split 'cc'/'phone' values still exist on the row dict for the UI.
 BASE_COLS = [
-    ("Customer name", 'name', 26),
-    ("Customer email", 'email', 30),
-    ("Country code", 'cc', 9),
-    ("Phone number", 'phone', 15),
-    ("Engagement category", 'category', 20),
-    ("Relevant chat", 'relevant', 60),
-    ("Removed chat", 'deleted', 40),
+    # Header text is matched to the agreed sheet EXACTLY, including the lower-case
+    # 'session engagement' and 'zoom chat' -- these strings are what downstream
+    # sheets match on, so do not "tidy" the capitalisation.
+    ("Activity Date", 'activity_date', 20),
+    ("Email", 'email', 30),
+    ("Phone Number", 'phone_fmt', 18),
+    ("Session Name", 'session_name', 22),
+    ("session engagement", 'category', 21),
+    ("zoom chat", 'relevant', 70),
 ]
+# Everything the 6-column deliverable drops is still one checkbox away, so no evidence
+# is ever lost -- including Removed chat, which together with Zoom chat accounts for
+# every distinct message a person sent.
 EXTRA_COLS = [
-    ("Category basis", 'basis', 40),
+    ("Customer name", 'name', 26),
+    ("Category Basis", 'basis', 46),
+    ("Confidence", 'confidence', 11),
+    ("Removed chat", 'deleted', 40),
     ("Zoom room", 'room', 12),
     ("Attended?", 'attended', 9),
     ("Minutes present", 'minutes', 10),
@@ -59,23 +75,48 @@ def write_xlsx(result, path, extras=False):
     cols = BASE_COLS + (EXTRA_COLS if extras else [])
     wb = xlsxwriter.Workbook(path, {'constant_memory': False, 'strings_to_urls': False,
                                     'strings_to_formulas': False})
-    H = wb.add_format({'bold': True, 'bg_color': '#1F3864', 'font_color': 'white',
-                       'border': 1, 'text_wrap': True, 'valign': 'vcenter'})
-    wrap = wb.add_format({'text_wrap': True, 'valign': 'top'})
-    top = wb.add_format({'valign': 'top'})
-    txt = wb.add_format({'valign': 'top', 'num_format': '@'})   # phone must never be a float
+    # Plain bold centred header on white, and pale-blue row banding -- matching the
+    # agreed sheet's look rather than the old navy header block.
+    BAND = '#EFF3FA'
+    H = wb.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter',
+                       'bottom': 1, 'bottom_color': '#C0C6CF'})
+    # Per-column body styles, x2: plain row and banded row.
+    def _fmt(**kw):
+        return (wb.add_format(dict(kw)), wb.add_format(dict(kw, bg_color=BAND)))
+    F_WRAP = _fmt(text_wrap=True, valign='top')                       # chat / basis
+    F_LEFT = _fmt(valign='top')                                       # email
+    F_CTR = _fmt(valign='top', align='center')                        # name / category
+    # Text format, not general. 'phone_fmt' looks like a formula to Excel ('+91-98...'
+    # would evaluate to a negative number) and 'activity_date' ('30/08/2026 11:00:00')
+    # would be coerced into a date serial and re-rendered in the reader's locale.
+    # The workbook also has strings_to_formulas off, so the leading '+' is never one.
+    F_TXT = _fmt(valign='top', align='center', num_format='@')        # date / phone
+
+    WRAP_KEYS = {'relevant', 'deleted', 'basis', 'all_chats'}
+    TXT_KEYS = {'activity_date', 'phone_fmt', 'phone', 'cc'}
+    CTR_KEYS = {'category', 'session_name', 'confidence', 'attended', 'room',
+                'minutes', 'msg_count'}
+
+    def style(key, banded):
+        i = 1 if banded else 0
+        if key in TXT_KEYS:
+            return F_TXT[i]
+        if key in WRAP_KEYS:
+            return F_WRAP[i]
+        if key in CTR_KEYS:
+            return F_CTR[i]
+        return F_LEFT[i]
 
     ws = wb.add_worksheet("Leads")
+    ws.set_row(0, 22)
     for c, (h, _k, w) in enumerate(cols):
         ws.set_column(c, c, w)
         ws.write(0, c, h, H)
-    wrap_keys = {'relevant', 'deleted', 'basis'}
-    txt_keys = {'phone', 'cc'}
     wrfail = 0
     for i, r in enumerate(rows, start=1):
+        banded = (i % 2 == 0)
         for c, (_h, k, _w) in enumerate(cols):
-            fmt = wrap if k in wrap_keys else (txt if k in txt_keys else top)
-            if ws.write(i, c, clean(r.get(k, "")), fmt):
+            if ws.write(i, c, clean(r.get(k, "")), style(k, banded)):
                 wrfail += 1
     ws.freeze_panes(1, 0)
     ws.autofilter(0, 0, len(rows), len(cols) - 1)
@@ -91,7 +132,7 @@ def write_xlsx(result, path, extras=False):
         nonlocal r_
         rs.write(r_, 0, clean(str(a)), B if b == "" else None)
         if b != "":
-            rs.write(r_, 1, clean(str(b)), wrap)
+            rs.write(r_, 1, clean(str(b)), F_WRAP[0])
         r_ += 1
 
     line("Zoom Chat Categoriser -- run report")

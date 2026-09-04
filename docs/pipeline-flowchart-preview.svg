@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="740" viewBox="0 0 1700 740">
+<defs><marker id="ac92a2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c92a2a"/></marker><marker id="a495057" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#495057"/></marker><marker id="a2f9e44" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f9e44"/></marker></defs>
+<rect width="1700" height="740" fill="#ffffff"/>
+<text x="40" y="74.5" font-family="Segoe UI,sans-serif" font-size="30" fill="#1e1e1e" text-anchor="start">Zoom Chat Categoriser — processing pipeline</text>
+<text x="40" y="106.25" font-family="Segoe UI,sans-serif" font-size="15" fill="#868e96" text-anchor="start">One workshop session: raw Zoom exports in, categorised lead sheet out. Every stage runs on the local machine.</text>
+<rect x="40" y="224" width="250" height="284" rx="8" fill="#e7f5ff" stroke="#1971c2" stroke-width="2"/>
+<text x="55" y="254.05" font-family="Segoe UI,sans-serif" font-size="19" fill="#1e1e1e" text-anchor="start">INPUTS</text>
+<rect x="55" y="283" width="220" height="62" rx="8" fill="#d0ebff" stroke="#1971c2" stroke-width="1"/>
+<text x="69" y="309.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">Attendee Report</text>
+<text x="69" y="328.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">.csv · one per Zoom room</text>
+<rect x="55" y="357" width="220" height="62" rx="8" fill="#d0ebff" stroke="#1971c2" stroke-width="1"/>
+<text x="69" y="383.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">Saved Chat</text>
+<text x="69" y="402.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">.txt · meeting_saved_chat</text>
+<rect x="55" y="431" width="220" height="62" rx="8" fill="#d0ebff" stroke="#1971c2" stroke-width="1"/>
+<text x="69" y="457.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">Pricing / CTA marks</text>
+<text x="69" y="476.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">minutes from start · optional</text>
+<rect x="340" y="256" width="250" height="220" rx="8" fill="#f3d9fa" stroke="#862e9c" stroke-width="2"/>
+<text x="355" y="286.05" font-family="Segoe UI,sans-serif" font-size="19" fill="#1e1e1e" text-anchor="start">PRE-FLIGHT</text>
+<text x="355" y="307.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">each room checked</text>
+<text x="355" y="322.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">before any scoring</text>
+<text x="355" y="352.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#1e1e1e" text-anchor="start">·  truncated chat export</text>
+<text x="355" y="376.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#1e1e1e" text-anchor="start">·  NUL-damaged CSV</text>
+<text x="355" y="400.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#1e1e1e" text-anchor="start">·  missing chat or report</text>
+<text x="355" y="424.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#1e1e1e" text-anchor="start">·  registration-only export</text>
+<text x="355" y="456.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#862e9c" text-anchor="start">verdict:  ok · WARN · FAIL</text>
+<rect x="640" y="150" width="420" height="432" rx="8" fill="#fff9db" stroke="#f59f00" stroke-width="2"/>
+<text x="655" y="180.05" font-family="Segoe UI,sans-serif" font-size="19" fill="#1e1e1e" text-anchor="start">PROCESSING</text>
+<rect x="655" y="209" width="390" height="62" rx="8" fill="#ffec99" stroke="#f59f00" stroke-width="1"/>
+<text x="669" y="235.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">1  ·  Parse</text>
+<text x="669" y="254.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">multi-section CSV · both Zoom chat formats</text>
+<rect x="655" y="283" width="390" height="62" rx="8" fill="#ffec99" stroke="#f59f00" stroke-width="1"/>
+<text x="669" y="309.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">2  ·  Attribute chat → person</text>
+<text x="669" y="328.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">inside its own room, by email; namesakes split by join/leave window</text>
+<rect x="655" y="357" width="390" height="62" rx="8" fill="#ffec99" stroke="#f59f00" stroke-width="1"/>
+<text x="669" y="383.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">3  ·  Score signals</text>
+<text x="669" y="402.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">phrase banks: buying language, urgency, fit, objections</text>
+<rect x="655" y="431" width="390" height="62" rx="8" fill="#ffec99" stroke="#f59f00" stroke-width="1"/>
+<text x="669" y="457.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">4  ·  Categorise</text>
+<text x="669" y="476.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">1 of 8 mutually-exclusive categories + written basis</text>
+<rect x="655" y="505" width="390" height="62" rx="8" fill="#ffec99" stroke="#f59f00" stroke-width="1"/>
+<text x="669" y="531.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">5  ·  Clean &amp; split chat</text>
+<text x="669" y="550.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">Relevant chat  vs  Removed chat</text>
+<rect x="1110" y="266" width="230" height="200" rx="8" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2"/>
+<text x="1125" y="296.05" font-family="Segoe UI,sans-serif" font-size="19" fill="#1e1e1e" text-anchor="start">QUALITY GATE</text>
+<text x="1125" y="318.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#495057" text-anchor="start">chat-clean audit</text>
+<text x="1125" y="352.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#1e1e1e" text-anchor="start">bad_chars   =  0</text>
+<text x="1125" y="376.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#1e1e1e" text-anchor="start">repeats       =  0</text>
+<text x="1125" y="400.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#1e1e1e" text-anchor="start">vocab_leaks =  0</text>
+<text x="1125" y="438.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#c92a2a" text-anchor="start">… or nothing ships</text>
+<rect x="1390" y="224" width="270" height="284" rx="8" fill="#d3f9d8" stroke="#2f9e44" stroke-width="2"/>
+<text x="1405" y="254.05" font-family="Segoe UI,sans-serif" font-size="19" fill="#1e1e1e" text-anchor="start">OUTPUTS</text>
+<rect x="1405" y="283" width="240" height="62" rx="8" fill="#b2f2bb" stroke="#2f9e44" stroke-width="1"/>
+<text x="1419" y="309.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">XLSX</text>
+<text x="1419" y="328.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">7 columns + Run Report sheet</text>
+<rect x="1405" y="357" width="240" height="62" rx="8" fill="#b2f2bb" stroke="#2f9e44" stroke-width="1"/>
+<text x="1419" y="383.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">CSV</text>
+<text x="1419" y="402.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">same columns</text>
+<rect x="1405" y="431" width="240" height="62" rx="8" fill="#b2f2bb" stroke="#2f9e44" stroke-width="1"/>
+<text x="1419" y="457.2" font-family="Segoe UI,sans-serif" font-size="16" fill="#1e1e1e" text-anchor="start">Results table</text>
+<text x="1419" y="476.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">filter · search · expand</text>
+<rect x="1110" y="545" width="230" height="76" rx="8" fill="#ffc9c9" stroke="#c92a2a" stroke-width="2"/>
+<text x="1124" y="573.25" font-family="Segoe UI,sans-serif" font-size="15" fill="#1e1e1e" text-anchor="start">DOWNLOAD BLOCKED</text>
+<text x="1124" y="596.4" font-family="Segoe UI,sans-serif" font-size="12" fill="#495057" text-anchor="start">junk leaked — fix first</text>
+<line x1="295" y1="366" x2="333" y2="366" stroke="#495057" stroke-width="2" marker-end="url(#a495057)"/>
+<text x="315" y="346.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#868e96" text-anchor="middle">upload</text>
+<line x1="595" y1="366" x2="633" y2="366" stroke="#495057" stroke-width="2" marker-end="url(#a495057)"/>
+<text x="615" y="346.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#868e96" text-anchor="middle">if usable</text>
+<line x1="1065" y1="366" x2="1103" y2="366" stroke="#495057" stroke-width="2" marker-end="url(#a495057)"/>
+<line x1="1345" y1="366" x2="1383" y2="366" stroke="#2f9e44" stroke-width="2" marker-end="url(#a2f9e44)"/>
+<text x="1365" y="346.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#2f9e44" text-anchor="middle">pass</text>
+<line x1="1225" y1="472" x2="1225" y2="538" stroke="#c92a2a" stroke-width="2" marker-end="url(#ac92a2a)"/>
+<text x="1238" y="504.35" font-family="Segoe UI,sans-serif" font-size="13" fill="#c92a2a" text-anchor="start">fail</text>
+<text x="40" y="673.3" font-family="Segoe UI,sans-serif" font-size="14" fill="#868e96" text-anchor="start">Chat that cannot be pinned to exactly one person (~1–2%) is DROPPED, never guessed — the exact count is reported on every run.</text>
+<text x="40" y="701.3" font-family="Segoe UI,sans-serif" font-size="14" fill="#868e96" text-anchor="start">Nobody can reach “purchase intent high” or “strong interest” on attendance alone — there must be purchase language in what they actually typed.</text>
+</svg>

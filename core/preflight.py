@@ -34,6 +34,11 @@ def check_rooms(rooms):
         msgs = []
         fail = warn = False
         yes = no = 0
+        # Session duration falls back to the same 200 min the no-attendee-report path uses.
+        # It must be bound BEFORE the attendee loop: a CSV that parses 0 rows (renamed
+        # header) hits `continue` and skips the session_meta assignment below, and the chat
+        # branch then reads `dur` whenever attendee_texts is non-empty.
+        dur = 200.0
 
         if not d['attendee_texts']:
             msgs.append("no attendee report in this room's files (poll/registration export only?)")

@@ -1,9 +1,22 @@
 # Zoom Chat Categoriser
 
 A local web tool: Zoom **attendee reports** + **chat exports** for one workshop session
-in → a spreadsheet with `name, email, country code, phone, engagement category,
-relevant chat, removed chat` out. Everything runs on this machine; nothing is uploaded
-anywhere.
+in → a spreadsheet out. Everything runs on this machine; nothing is uploaded anywhere.
+
+**Output columns (agreed 2026-09-03):**
+
+| # | Column | Source |
+|---|---|---|
+| 1 | Activity Date | typed on the dashboard as `dd:mm:yy hh:mm`; blank falls back to the session's real start time |
+| 2 | Email | attendee report |
+| 3 | Phone Number | `+cc-number` (dial code split out by `contact_norm`, then rejoined) |
+| 4 | Session Name | typed on the dashboard, written onto every row |
+| 5 | Session Engagement | the 8-way category (`categorize()`, engine parity v4.6) |
+| 6 | Zoom chat | the substantive part of the person's chat (`chat_cleaner`) |
+
+Tick **Include debug columns** to also get `Customer name`, `Category Basis`,
+`Confidence`, `Removed chat`, `Zoom room`, `Attended?`, `Minutes present`,
+`Message count` — nothing is lost from the deliverable, it is one checkbox away.
 
 Built by **extracting and wiring the be10x lead-scoring engine's validated logic** —
 not re-implementing it (see the build plan). `core/chat_cleaner.py` and

@@ -115,6 +115,9 @@ def session_meta(lines):
     return meta
 
 
+NULCH = chr(0)      # a literal NUL, spelled without an escape
+
+
 def _find_attendee_header(lines):
     """Index of the Attendee Details header row.
 
@@ -123,12 +126,18 @@ def _find_attendee_header(lines):
     attendee-shaped (has 'User Name (Original Name)' + 'Email' + one of First Name / Phone /
     Registration Time) -- the Host/Panelist sections lack those; if several match, take the LAST
     (Attendee Details is the final section in every real export)."""
-    hi = next((i for i, l in enumerate(lines) if l.startswith(ATT_HDR_START)), None)
+    # Header DISCOVERY has to be NUL-tolerant as well. _csv_row repairs NULs, but it only
+    # runs once a line has been recognised: a single NUL inside 'Attended,' (Zoom does emit
+    # them -- 12 July / Ops 6 carries 48) failed both startswith tests, the header was never
+    # found, and the whole room's attendees were discarded as 'parsed 0 rows'.
+    def _bare(l):
+        return l.replace(NULCH, '') if NULCH in l else l
+    hi = next((i for i, l in enumerate(lines) if _bare(l).startswith(ATT_HDR_START)), None)
     if hi is not None:
         return hi
     cands = []
     for i, l in enumerate(lines):
-        if not l.startswith("Attended,"):
+        if not _bare(l).startswith("Attended,"):
             continue
         row = _csv_row(l) or []
         if not row or row[0].strip() != "Attended":
@@ -222,7 +231,14 @@ def aggregate_text(text):
         p['last'] = (r.get('Last Name') or p['last']).strip()
         p['country'] = (r.get('Country/Region Name') or p.get('country', '') or '').strip()
         j, lv = parse_dt(r.get('Join Time')), parse_dt(r.get('Leave Time'))
-        if j and lv:
+        # `lv >= j` matters: Zoom exports rows whose Leave precedes its Join (its own
+        # 'Time in Session (minutes)' goes NEGATIVE on those -- e.g. -178). Such a segment
+        # says nothing about when the person was present. merged_minutes has always
+        # discarded them, so keeping them in segments/name_segs made the three views
+        # disagree: minutes read 0 while seg_list looked populated, which made
+        # pct_attended publish a confident 0% and made the chat presence-window test rule
+        # that candidate out instead of admitting it could not place them.
+        if j and lv and lv >= j:
             p['segments'].append((j, lv))
         # Zoom's own attendance verdict: '--' join/leave rows are Attended=No registrants.
         attended_row = str(r.get('Attended', '')).strip().lower() == 'yes'
@@ -234,7 +250,8 @@ def aggregate_text(text):
             # per row, not per person).
             raw_nm = r.get('User Name (Original Name)', '') or ''
             if raw_nm:
-                p.setdefault('name_segs', {}).setdefault(raw_nm, []).append((j, lv) if (j and lv) else None)
+                p.setdefault('name_segs', {}).setdefault(raw_nm, []).append(
+                    (j, lv) if (j and lv and lv >= j) else None)
         for _f in ('Join Time', 'Leave Time'):
             _v = str(r.get(_f) or '').strip()
             if _v and _v not in ('--', '-') and parse_dt(_v) is None:
@@ -277,7 +294,16 @@ def pct_attended(rec, meta):
     'scored the worst timing for people we have no timing for' incident."""
     dur = meta.get('duration_min') or 0
     mp = rec.get('minutes_present', 0) or 0
-    no_timing = (not (rec.get('seg_list') or rec.get('first_join'))
+    # A segment whose leave precedes its join carries no usable timing -- Zoom exports
+    # these with a NEGATIVE 'Time in Session' of its own (measured: 107 people across the
+    # 11 archived sessions have no other kind of segment). merged_minutes already drops
+    # them, so without this they arrive here as a confident 0 minutes / 0%, which is the
+    # exact "scored the worst timing for people we have no timing for" failure this
+    # function exists to prevent.
+    _segs = rec.get('seg_list') or []
+    _usable = any(a and b and b >= a for a, b in _segs)
+    no_timing = ((not (_segs or rec.get('first_join'))
+                  or (_segs and not _usable))
                  and (rec.get('attended_flag') or rec.get('unparsed_ts')))
     if no_timing:
         return None

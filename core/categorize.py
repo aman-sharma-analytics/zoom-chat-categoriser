@@ -1,13 +1,20 @@
 # -*- coding: utf-8 -*-
 """8-way engagement categorisation -- VERBATIM PORT from the be10x engine's
-invited_report.py (v4.1-v5.5 lineage, ported 2026-08-05).
+invited_report.py, engine parity **v4.6 (2026-09-01 semantic-audit batch P1-P7)**.
 
-Do not edit the regex constants, _msg_signals() or categorize() by intuition: every
-alternation encodes a specific real-world failure found by reading actual transcripts
-(Hindi/Tamil/Telugu handling, 'paid' vs 'high paying job', tool-price vs programme-price
-questions, AV complaints that must not count as negativity). The only deliberate change
-from the source: the _HAND hand-review override table ships EMPTY (those entries were
-per-date corrections for historical sessions).
+Re-ported 2026-09-01 by AST-extracting the exact source segments from the engine, so no
+pattern is ever retyped. Do not edit the regex constants, _msg_signals() or categorize()
+by intuition: every alternation encodes a real-world failure found by reading actual
+transcripts. Deliberate differences from the engine, and the ONLY ones:
+  * the _HAND hand-review override table ships EMPTY (engine entries are per-date fixes
+    for specific historical sessions and do not travel)
+  * categorize_person() at the tail is this tool's adapter, not engine code
+
+v4.6 adds: P1 text-anchor for dim-only promotion (_txtanchor), P2 ABUSEHI hard-abuse veto,
+P3 PAYRE typo tolerance ("payment donef"), P4 EMIASK Hinglish (kisht), P5 RITUALPHRASE
+(multi-word ritual affirmations no longer count as substance), P6 ENTFIT -> strong interest,
+P7 bot/notetaker-named attendee rows -> no clear intent. MILDNEG also gained six Hinglish
+alternations in this batch.
 
 The eight categories, priority-ordered and mutually exclusive:
     non attended -> non chatted -> negative engagement -> purchase intent high
@@ -18,19 +25,17 @@ without actual purchase language in the text. This is deliberate -- do not 'impr
 import re
 import unicodedata
 
-PAYRE = re.compile(r"\b(paid(?! (?:attention|heed))|payment done|payment complete|payment successful|(?:i|we)(?:'?ve| have| had)? enrolled|enrolled in(?: the)? inner|instal?lment|emi done|(?:after|already|done) paying|(?:have |already |i )?made (?:the |my )?payment|done (?:my|the|with) payment|(?:done|did|making) (?:the )?payment|payed|registration (?:completed|done)|done registration|payment (?:is )?done|booking (?:done|confirmed|amount paid)|slot booked)\b", re.I)
-# payment FRICTION/attempt (hot signal): tried/asked how to pay, payment failing, UPI/OTP issues
+PAYRE = re.compile(r"\b(paid(?! (?:attention|heed))|payment don(?:e\w{0,2})|payment complete|payment successful|(?:i|we)(?:'?ve| have| had)? enrolled|enrolled in(?: the)? inner|instal?lment|emi done|(?:after|already|done) paying|(?:have |already |i )?made (?:the |my )?payment|done (?:my|the|with) payment|(?:done|did|making) (?:the )?payment|payed|registration (?:completed|done)|done registration|payment (?:is )?don(?:e\w{0,2})|booking (?:done|confirmed|amount paid)|slot booked)\b", re.I)
 PAYFRICT = re.compile(r"(?:\b(?:not able|unable|can ?no?t|can'?t|couldn'?t|fail(?:ed|ing)?|issue|problem|error|trying|struggling|how)\b[^.\n|]{0,40}\bpay(?:ing|ment)?\b)|(?:\bpay(?:ing|ment)?(?: link| page| option| gateway)?\b[^.\n|]{0,40}\b(?:fail(?:ed|ing|ure)?|not work\w*|issue|problem|error|declin\w*|stuck|pending)\b)|\b(?:upi|gpay|google pay|phonepe|paytm|net ?banking|debit card|credit card)\b[^.\n|]{0,30}\b(?:pay|payment|not|issues?|fail\w*|option)\b|\botp\b[^.\n|]{0,25}\b(?:not|nahi|issue)\b|\bpay(?:ing|ment)?\b[^.\n|]{0,30}\bagain\b|\basks? (?:me )?to pay\b|\bpaid (?:twice|two times|2 times|double)\b|\bdouble (?:payment|charged?)\b|\b(?:get|want|need)(?: my| a)? refund\b|\brefund (?:policy|option|process)\b|\bqr\b[^.\n|]{0,30}\b(?:error|fail\w*|not work\w*|again|scan\w*)\b|\bshow (?:the |me )?(?:the )?qr\b|\bqr code (?:once )?again\b|\bpay\w{0,5}\b[^.\n|]{0,15}\b(?:url|link)\b[^.\n|]{0,20}\b(?:wrong|not work\w*|error)\b|\bpayment\b[^.\n|]{0,25}\b(?:pending|not show\w*)\b|\b(?:issues?|problems?|errors?)\b[^.\n|]{0,30}\bpay(?:ing|ment|men)?\b|\bpay(?:ing|ment|men)?\b[^.\n|]{0,30}\b(?:issues?|problems?|errors?|fail\w*|failied|faild)\b|\bpayment kar\w{0,6} (?:paunga|dunga|karunga)\b|\btab (?:jake|ja ?ke) payment\b|\bsalary (?:aayega|milega|aane)[^.\n|]{0,30}\bpayment\b", re.I)
-# ---- v4.1 full-chat semantic layer: tool-cost guard, join/EMI/price asks, strong-vs-weak negativity ----
-TOOLPRICE = re.compile(r"\bfree (?:or|ya) paid\b|\bpaid (?:or|ya) free\b|\bis (?:it|this|that)(?: tool)? (?:paid|free)\b|\b(?:paid|free|premium) (?:versions?|plans?|subscriptions?|accounts?|tools?|wala|features?|packages?)\b|\b(?:this|it|that) is (?:a )?paid\b|\bpaid hai\b|\bis (?:it|this) free\b|\b(?:chat ?gpt|gpt|gemini|claude|canva|julius|comet|wispr|whispr|copilot|perplexity|midjourney|n8n|notebook ?lm|this tool|that tool|these tools?)\b[^.\n|]{0,30}\b(?:paid|free|cost|price|purchase|subscription)\b|\b(?:purchase|buy)\b[^.\n|]{0,25}\b(?:tool|domain|laptop|software|subscription)\b", re.I)
+TOOLPRICE = re.compile(r"\bfree (?:or|ya) paid\b|\bpaid (?:or|ya) free\b|\bis (?:it|this|that)(?: tool)? (?:paid|free)\b|\b(?:paid|free|premium) (?:versions?|plans?|subscriptions?|accounts?|tools?|wala|features?|packages?)\b|\b(?:this|it|that) is (?:a )?paid\b|\bpaid hai\b|\bis (?:it|this) free\b|\b(?:chat ?gpt|gpt|gemini|claude|canva|julius|comet|wispr|whispr|copilot|perplexity|midjourney|n8n|notebook ?lm|this tool|that tool|these tools?)\b[^.\n|]{0,30}\b(?:paid|free|cost|price|purchase|subscription)\b|\b(?:purchase|buy)\b[^.\n|]{0,25}\b(?:tool|domain|laptop|software|subscription)\b|\b(?:credits?|tokens?|usage limits?|free (?:tier|limits?)|daily limits?)\b[^.\n|]{0,35}\b(?:over|out|exhaust\w*|finish\w*|expir\w*|khatam|renew\w*)\b|\brun(?:s|ning)? out\b[^.\n|]{0,15}\b(?:credits?|tokens?)\b", re.I)
 PASTGRIEV = re.compile(r"\b(?:paid|purchased|bought|taken(?: the| your)? course|enrolled|registered)\b[^.\n|]{0,70}\b(?:20\d\d|earlier|last (?:year|time)|previously|already a member)\b|\bpreviously purchased\b|\balready (?:taken|did|done)(?: the| your)? (?:course|program|workshop)\b", re.I)
 JOINHOW = re.compile(r"\bhow (?:to|can (?:i|we)|do (?:i|we)|should i) (?:join|enroll|enrol|register|buy|purchase|start|sign ?up)\b|\b(?:want|like) to (?:join|enroll|enrol|register|sign ?up)\b|\b(?:can|how can) i register\b|\b(?:join|enroll|enrol|register) (?:kaise|kese|kayse)\b|\bkaise (?:join|enroll|register|le)\b|\bwhere (?:to|can i|do i) (?:join|enroll|register|pay|buy)\b|\b(?:registration|enrollment|enrolment|joining|payment) (?:link|process|page|form)\b|\bnext batch\b|\bbatch (?:start|kab)\b|\bwhen (?:does|will|is)(?: the)? (?:batch|course|program|class(?:es)?)\b[^.\n|]{0,20}\bstart\b|\bhow to make payment\b|\b(?:we|i)'?ll (?:definitely )?join\b|\bready to (?:take|join|buy|enrol(?:l)?)\b|\bsend (?:me )?(?:the )?(?:payment|registration|joining) link\b|\bcan i (?:still )?(?:join|enrol(?:l)?|register)\b|\benrol(?:l)?ment purchase\b", re.I)
-EMIASK = re.compile(r"\b(?:emi|instal?lments?)\b(?![^.\n|]{0,12}\bdone\b)", re.I)
+EMIASK = re.compile(r"\b(?:emi|instal?lments?|kis(?:ht|t)\w{0,3})\b(?![^.\n|]{0,12}\bdone\b)|\bpayment ka?rn[iy]\w{0,2} (?:hogi|hoga|padeg[ia])\b|\b(?:1st|first|pehl[ae]) month\b[^.\n|]{0,25}\bpayment\b", re.I)
 DISCOUNT = re.compile(r"\b(?:discount|coupon|offer price|scholarship|concession|price negotiable|any offer)\b", re.I)
-PRICEASK = re.compile(r"(?!(?:[^.\n|]{0,40})?(?:\bkitn\w+ (?:time|der|ghant\w+)\b|\bkamat\w+\b|\btoken limits?\b))(?:\b(?:price|pricing|fees?|cost|charges?|kitna|kitne|kitni)\b|\bamt\b *\?|\bhow much\b(?! (?:longer|time|more|hours?|mins?|minutes?))|₹|\brs\.? ?\d)", re.I)
+PRICEASK = re.compile(r"(?!(?:[^.\n|]{0,40})?(?:\bkitn\w+ (?:time|der|ghant\w+|baa?r|promotion\w*)\b|\bkamat\w+\b|\btoken limits?\b))(?:\b(?:price|pricing|fees?|cost|charges?|kitna|kitne|kitni)\b|\bamt\b *\?|\bhow much\b(?! (?:longer|time|more|hours?|mins?|minutes?))|\u20b9|\brs\.? ?\d)", re.I)
 TECHNOISE = re.compile(r"\b(?:audio|voice|sound|echo\w*|mic|volume|screen|video|visible|audible|lag|buffer|network|wifi|internet|rejoin|reconnect|disconnect|hang|stuck|slow down|too fast|going (?:too )?fast|go slow|speak slowly|slowly|speed|repeat (?:that|it|again|the)|not clear|louder)\b|\bzoom\b[^.\n|]{0,20}\b(?:issue|problem|link)\b|\bawa[zj]\b|\bvery (?:much )?fast\b|\btalks? (?:so |very )?fast\b|\bresolve the (?:problem|issue)\b|\bdo the needful\b|\bvo+i+ce+\w*\b|\bwhen (?:will|does|do) (?:this|it|the )?(?:session|webinar|workshop|class)? ?(?:end|finish|over|complete)\b|\bwhen will (?:the )?(?:program|class|session|workshop) start\w*\b|\bhow much more time\b|\bwrap (?:up|it up)\b|\bwind up\b|\bis the session over\b|\bfinish it\b|\bend (?:the|this) session\b|\bwhen you will end\b|\bwhen (?:it|this) will end\b|\bstill how much time\b|\bhow much time (?:left|more|remaining)\b|\bwhen will (?:u|you) end\b|\bslower\b|\bspeak (?:\w+ ){0,2}slow\w*\b|\bplease start\b|\bstart the (?:class|session|workshop|topic)\b|\blets? start\b|\bwhen (?:will|does) (?:it|this|the \w+)? ?start\b|\bstill not started\b|\bend (?:it|this|the session) (?:at|by) \d|\bstick to (?:your|the) timings?\b|\bturn off (?:the )?music\b|\brepeat(?:ing)? (?:the )?(?:same )?(?:words?|sentences?|thing|twice)\b|\bevery single word\b|\bgiv\w* a pause\b|\bpause\b[^.\n|]{0,20}\bspeak\w*\b|\bnot able to (?:hear|see|login|join)\b|\b(?:how to )?join (?:the )?(?:chat|zoom|meeting|audio|call)\b|\bcan'?t (?:hear|see)\b", re.I)
 SEVERE = re.compile(r"\b(?:scam\w*|fraud\w*|fake|cheat(?:ed|ing|ers?)?|loot|chor|jhoot\w*|fek\w+|bakwas|bakwaas|faltu|rubbish|hopeless|worst|horrible|pathetic|nonsense|useless|bek[aw]ar|misleading|clickbait|third class|liars?|lying|time ?pass|time ?wast\w*|waste of (?:time|money)|wasted my [\w ]{0,12}(?:time|hours?|money)|not interested|no thanks|crap(?:py)?(?! (?:data|the data|content from))|shit(?:ty|tt+)?\w*|bull ?shit\w*|wtf|f+u+c+k\w*|f off|get lost|ass ?holes?|mofos?|bsdk|bosdik\w*|lod[ae]\w*|gadh[ao]\w*|bewakoof|m(?:adar|other) ?chod\w*|b(?:ahan|ehen) ?chod\w*|chutiy\w*|bakchod\w*|money hungry|freaks?|shame(?:ful|less)? on you|lame|yapping|not worth(?: it)?)\b|\bmaking (?:a )?fool\b|\bnever (?:going to )?join\w*\b(?=[^.\n|]{0,30}\bworkshop|\b)|\bwast(?:e|ed|ing)\b[^.\n|]{0,25}\b(?:time|money|everyone|hours?)\b|\bnever (?:going to )?(?:attend|join)\b|\bare (?:you|u)\b[^.\n|]{0,15}\b(?:crazy|mad|insane)\b|(?:^|\s)waste\s*[.!]*\s*$|\bsell(?:ing)? your (?:products?|courses?|programs?)\b[^.\n|]{0,30}\bdisappoint\w+|\byou should be jailed\b|\bnot (?:a )?live session\b|\bmake (?:us|me|people) fool\w*\b|\b(?:this|it|its|it's|meeting|session) is (?:just )?(?:a )?(?:pre-?)?recorded\b", re.I)
-MILDNEG = re.compile(r"\bboring\b|\bbor(?:e|ing)\w* (?:ho|now)\b|\birritat\w+\b|\bannoy\w+\b|\bdisappoint\w+\b|\bhard ?sell\w*\b|\bsales? pitch\b|\b(?:only|just|too much(?: of)?|sirf)\s+(?:doing\s+|about\s+)?(?:selling|marketing|promotions?|promoting|advertis\w+|bech\w*|ads?|testimonials?)\b|\bstop\b[^.\n|]{0,15}\b(?:selling|advert\w*|promot\w*|marketing|bloating|pitch\w*)\b|\b(?:why|stop) sell\w*\b|\bsell(?:ing)? your (?:products?|courses?|programs?)\b|\bstop (?:it|this|here)\b|\bcome to the point\b|\bget to (?:the )?point\b|\bmove ahead\b|\bcut it short\b|\bwrap (?:it )?up\b|\bwind up\b|\btoo long\b|\brunning too long\b|\bteaching less\b|\bless teaching\b|\badvertis\w+ more\b|\b(?:don'?t|do not|stop|without) wast\w+ [\w ]{0,10}time\b|\bcourse bech\w*\b|\btoo much time\b|\bsum (?:it )?up\b|\b(?:higher|more) promotion\b|\blo+sing patience\b|\btoo much of talking\b|\bonly (?:about )?to (?:buy|sell) your\b|\btalking so much only\b|\binstead of (?:just )?(?:marketing|selling|promoting|advertis\w+)\b|\bis (?:it|he|this|the (?:course|session|workshop)) over\b|\bcan we end\b|\bend (?:up )?(?:here|now)\b|\bbo+a?r+ing\b", re.I)
+MILDNEG = re.compile(r"\bboring\b|\bbor(?:e|ing)\w* (?:ho|now)\b|\birritat\w+\b|\bannoy\w+\b|\bdisappoint\w+\b|\bhard ?sell\w*\b|\bsales? pitch\b|\b(?:only|just|too much(?: of)?|sirf)\s+(?:doing\s+|about\s+)?(?:selling|marketing|promotions?|promoting|advertis\w+|bech\w*|ads?|testimonials?)\b|\bstop\b[^.\n|]{0,15}\b(?:selling|advert\w*|promot\w*|marketing|bloating|pitch\w*)\b|\b(?:why|stop) sell\w*\b|\bsell(?:ing)? your (?:products?|courses?|programs?)\b|\bstop (?:it|this|here)\b|\bcome to the point\b|\bget to (?:the )?point\b|\bmove ahead\b|\bcut it short\b|\bwrap (?:it )?up\b|\bwind up\b|\btoo long\b|\brunning too long\b|\bteaching less\b|\bless teaching\b|\badvertis\w+ more\b|\b(?:don'?t|do not|stop|without) wast\w+ [\w ]{0,10}time\b|\bcourse bech\w*\b|\btoo much time\b|\bsum (?:it )?up\b|\b(?:higher|more) promotion\b|\blo+sing patience\b|\btoo much of talking\b|\bonly (?:about )?to (?:buy|sell) your\b|\btalking so much only\b|\binstead of (?:just )?(?:marketing|selling|promoting|advertis\w+)\b|\bis (?:it|he|this|the (?:course|session|workshop)) over\b|\bcan we end\b|\bend (?:up )?(?:here|now)\b|\bbo+a?r+ing\b|\bbas ?[ck]ar\w{0,4}\b|\bband kar(?:o| ?do)\b|\bbohot ho g(?:ya|aya)\b|\bfuddu\b|\brehne d(?:o|ijiye)\b|\bek hi (?:baat|chi+z|cheez)\b[^.\n|]{0,25}\b(?:bol|beh?k|keh|rat)\w*\b", re.I)
 RITUALTOK = re.compile(r"^(?:yes+|ye+s*|y|no+|ok(?:ay)?|me+|swp|gd|gc|pe|bp|mb+|amb|tmb|bmb|ready+\w*|read+y+\w*|10x+|100x|1000x|bonus|action|sh|s|done|sure|agree(?:d)?|true+|clear|hind[io]|english|tamil|telugu|kannada|marathi|gujarati|bengali|punjabi|bhojpuri|malayalam|odia|kashmiri|konkani|sanskrit|\d{1,3}|[\d,.]+ ?(?:lpa|cr|lakhs?|l)|👍+|✋+|❤+|🙏+)[.!\s]*$", re.I)
 POSTOK = re.compile(r"\b(?:wow+|woo+w*|amazing|awesome|excellent|great|loved? it|nice|superb?|super|fantastic|excit\w+|mind ?blow\w*|magic\w*|brilliant|perfect|helpful|goo+d|boom|really cool|very well|well done|thank(?:s| you)|fine|beautiful|lovely)\b|👏|🔥|😍|🥵|🤯", re.I)
 NEGGUARD = re.compile(r"\b(?:no|without|zero) (?:time )?wast\w+\b|\bshit down\b|\bwast\w+ [\w ]{0,15}(?:without knowing|before (?:this|knowing)|till (?:now|date)|until now|so far)\b|\bhope\b[^.\n|]{0,20}\bwast\w+|\bdon'?t want to waste (?:my|our)\b|\bwaste of time (?:for |who |those )\w*|\bnot interested (?:about|in) (?:your )?(?:backgr\w*|intro\w*|stor(?:y|ies)|achievements?)\b|\b(?:those|people|ones?) who are not interested\b|\bnot interested further\b|\bnot interested in \d{1,3}%|\bnot interested\b(?=[^.\n|]{0,60}\binterested (?:only )?in\b)", re.I)
@@ -48,9 +53,6 @@ NEGPOS = re.compile(r"\bnow (?:its |it'?s )?eas\w+|\bnot (?:at all )?boring\b|\b
 PROFWORDS = re.compile(r"\b(?:fraud|scam|fake|security)\b", re.I)
 NEGQ_TOPIC = re.compile(r"^(?:how|what (?:is|are|if)|which|can (?:i|we)|could|does|is (?:there|it|this)|where|when|why|kaise|kya)\b", re.I)
 WHATA = re.compile(r"\bwhat a\b|\bkya hi\b", re.I)
-
-
-# ---- v4.5 (NEG re-audit) ----
 RECVETO = re.compile(r"scam|fake|fraud|caught|lying|\blie\b|100 ?%|\bsure\b|definitely|already attended|attended \w+ weeks? ago|\bi have attended\b|attended the last\b|same as|\bexact same\b|\bso it is\b[^.\n|]{0,15}record|prove|proof|\bhuman\b|scripted|1\.5x|fast ?mode|\bsold\b|shameless|foolish|\badmin\b|chat ?box|\bvery bad\b|\bbad experience\b|\bloot|cheat|\bliars?\b|\blog\b|time was|\d{1,2}:\d{2}|timestamp|crap\w*|\bshit\w*|\bworst\b|bakwa+s+|useless|rubbish|bull ?shit|pathetic|nonsense|hopeless|horrible|time ?pass|faltu|bek[aw]ar|jhooth?|fek\w+", re.I)
 RECHEDGE = re.compile(r"\bi (?:think|thing|guess|feel|believe)\b|\blooks? like\b|\bseems?\b|\bfeels? like\b|\bmaybe\b|\bit seems\b", re.I)
 RECQSTART = re.compile(r"^\s*(?:is|isb|can|are|does|do|was)\b", re.I)
@@ -59,10 +61,8 @@ STARTREQ = re.compile(r"\blets? start\b|\bplease start\b|\bstart (?:the|this|wit
 PROMOW = re.compile(r"\b(?:sell\w*|promot\w*|market\w*|advertis\w*|course|program(?:me)?|pitch|bech\w*|testimonial\w*)\b", re.I)
 DELIB = re.compile(r"\bwant (?:a day|time|some time) to think\b|\bneed (?:a day|time) to (?:think|decide)\b|\bthink about it\b|\bwant a day\b", re.I)
 FEARRE = re.compile(r"\b(?:i'?m|i am|im)\s+(?:scared|afraid|worried)\b|\bscared (?:from|of)\b|\bdar lag", re.I)
-D2SET = ('too long', 'wrap up', 'wind up', 'is it over', 'can we end', 'end here', 'end now', 'move ahead', 'come to the point', 'get to the point', 'cut it short', 'sum up', 'sum it up')
+D2SET = ('too long','wrap up','wind up','is it over','can we end','end here','end now','move ahead','come to the point','get to the point','cut it short','sum up','sum it up')
 CDQ = re.compile(r"(?:class(?:es)?|course|zoom)\b[^.\n|]{0,40}record|record\w*[^.\n|]{0,30}\b(?:class(?:es)?|course)\b", re.I)
-
-# ---- v4.4 (full category audit) ----
 BUILDPAY = re.compile(r"\b(?:make|create|build|develop|design)\b[^.\n|]{0,25}\bpayment (?:app|gateway|system|website|page)s?\b", re.I)
 SESSJOIN = re.compile(r"\b(?:later|tomorrow|next (?:session|week)|other slot|another slot|leave|left|missed|rejoin|remaining)\b", re.I)
 PROGANCH = re.compile(r"\b(?:course|program(?:me)?|inner|batch|fee|money|salary|working|years? old|early ?bird|training)\b", re.I)
@@ -75,22 +75,33 @@ TASKCTX = re.compile(r"\b(?:taking|takes|took|i want|i am|my|prepare|create|make
 ADDONPAY = re.compile(r"paid[^.\n|]{0,30}\b(?:extra|additional(?:ly)?|for (?:the )?(?:prompt|notes?|bonus|template)s?)\b|\bpaid \d{2,3}\b(?! ?k)", re.I)
 PAYQOBJ = re.compile(r"^\s*(?:is|are|isn'?t|was|does|do|were)\b|\?\s*$", re.I)
 PAYACT = re.compile(r"\b(?:i|we|i'?ve|have|had|just|already|made|done|did|making)\b[^.\n|]{0,15}\b(?:paid|payment|payed)\b|\bpayment (?:is )?(?:done|complete|successful)\b|\b(?:paid|payed) (?:for|the|my|it)\b|^\s*paid\s*[.!]*\s*$|^\s*\w+ (?:paid|payed)\s*[.!]*\s*$", re.I)
+ABUSEHI = re.compile(r"ch\w{0,2}t[il]y|bhadv|bhosd|bsdk|bakchod|madarch|motherch|behe?nch|kamin[ae]\w*|haraa?mi|jhandu|chomu|\bg+a+ndu\b|loot(?:ne|er)\w*|\bthag\w*|dhokheba\w*|\bbhag ch\w+|\blootere\b", re.I)
+RITUALPHRASE = re.compile(r"^\W{0,3}(?:(?:y+e+s+s*|ye+ah|ok(?:ay)?|sure(?:ly)?|definitely|defin[ae]tl?y|of ?course|100 ?%|done|ready|i (?:will|wil+|would)(?: do(?: it)?)?|it (?:would|will)|we (?:will|wil+|would)|no doubt|promise|pakka|bilkul|zaroor|jarur|ha+n(?: ji)?|ji(?: haan)?|noted|got it|understood|agreed?|right|correct|exactly|same|more+|less|\d+ ?x+|sir+|mam|ma'?am|ji|bhai)[\s,.!'\u2019]*){1,6}$", re.I)
+ENTFIT = re.compile(r"\bimplement\w*\b[^.\n|]{0,30}\b(?:firm|company|organi[sz]ation|team|office|business|agency)\b|\b(?:for|in) (?:our|my) (?:firm|company|organi[sz]ation|team|agency|startup)\b|\bcompany (?:policy|restrict\w*|allow\w*|approv\w*)\b|\b(?:license[sd]?|licence[sd]?)\b[^.\n|]{0,30}\b(?:compan\w*|allow\w*|restrict\w*|permit\w*)\b|\bcompan\w*\b[^.\n|]{0,35}\b(?:license[sd]?|licence[sd]?|subscription)\b|\benterprise (?:version|plan|use|rollout)\b|\bteam rollout\b|\bfor (?:my|our) (?:team|employees|staff)\b", re.I)
 _HAND_DATE = [None]
-# Hand-review override table: deliberately EMPTY in this tool (the engine's entries were
-# per-date corrections for specific historical sessions and do not travel).
-_HAND = {}
-
-# ---- 8-way engagement categorisation ----
 QMARKS = (" how ", " what ", " which ", " when ", " where ", " why ", " kaise", " kya ",
           "can i", "can we", "can you", "can u ", "could you", "please share", "pls share", "share the",
           "send the", "is there", "will i", "will we", "do we", "does it", "tell me", "any link")
-CAT_PIH = "purchase intent high"; CAT_SI = "strong interest"; CAT_MI = "moderate interest"
-CAT_IS = "information seeking"; CAT_NCI = "no clear intent"; CAT_NEG = "negative engagement"
-CAT_NC = "non chatted"; CAT_NA = "non attended"
+CAT_PIH = "purchase intent high"
+CAT_SI = "strong interest"
+CAT_MI = "moderate interest"
+CAT_IS = "information seeking"
+CAT_NCI = "no clear intent"
+CAT_NEG = "negative engagement"
+CAT_NC = "non chatted"
+CAT_NA = "non attended"
 CAT_ORDER = [CAT_PIH, CAT_SI, CAT_MI, CAT_IS, CAT_NCI, CAT_NEG, CAT_NC, CAT_NA]
+
+# Hand-review override table: deliberately EMPTY in this tool (the engine's entries were
+# per-date corrections for specific historical sessions).
+_HAND = {}
+
+# v4.6 P7: bot/notetaker display-name detector, used by categorize().
+_TEAM_RE = re.compile(r'\bbe ?10x\b|team be10x|fireflies|notetaker|otter\.ai|read\.ai|\bfathom\b|^\s*(co[- ]?host|host|moderator|panelists?|organiser|organizer|admin|team)\s*$', re.I)
 
 
 def _ir_norm_name(raw):
+    import unicodedata
     x = unicodedata.normalize('NFKC', str(raw or '')).strip().lower()
     x = re.sub(r'[^\w\s]', ' ', x, flags=re.UNICODE)
     return re.sub(r'\s+', ' ', x).strip()
@@ -100,7 +111,7 @@ def _msg_signals(msgs):
     """v4.1: per-message semantic flags over the FULL chat (or evidence-split fallback)."""
     s=dict(pay=0,frict=0,toolp=0,griev=0,join=0,emi=0,disc=0,price=0,q=0,sneg=0,mild=0,rit=0,pos=0,tech=0,pay_sup=0)
     for m in msgs:
-        m=m.replace('’',"'").replace('‘',"'")
+        m=m.replace('\u2019',"'").replace('\u2018',"'")
         ml=' '+m.lower()+' '
         tool=bool(TOOLPRICE.search(m)); tech=bool(TECHNOISE.search(m))
         guard=bool(NEGGUARD.search(m)) or bool(NEGPOS.search(m)) or (bool(PROFWORDS.search(m)) and bool(PROFCTX.search(m)))
@@ -148,6 +159,10 @@ def _msg_signals(msgs):
         if sev and mt is not None and mt.group(0).lower().startswith('no thanks'): s['nothanks']=1
         if sev and re.search(r'(?i)\bwast|useless|time ?pass', (mt.group(0) if mt else '')) or (sev and len(m.strip())<=8 and re.match(r'(?i)\s*(?:f+u+c+k+|wtf)\W*$', m.strip())): s['sneg_av']=s.get('sneg_av',0)+1
         if DELIB.search(m): s['delib']=1
+        if ABUSEHI.search(m) and not JOKE.search(m):
+            s['ab'] = s.get('ab', 0) + 1        # v4.6 P2: hard-abuse marker (Hinglish incl.)
+            if not sev: s['sneg'] += 1
+        if ENTFIT.search(m) and not sev: s['entfit'] = s.get('entfit', 0) + 1   # v4.6 P6
         if RITUALTOK.match(m.strip()): s['rit']+=1
         if praise: s['pos']+=1
         if PASTGRIEV.search(m): s['griev']+=1
@@ -173,9 +188,9 @@ def _msg_signals(msgs):
 
 
 def categorize(row, ix, msgs=None, orphan=False, no_text=False):
-    """v4.1: bucket an attendee/walk-in row into one of 8 engagement categories.
-    Chat-semantic layer runs over the attendee's FULL chat messages (msgs);
-    falls back to the evidence-string split when msgs is None.
+    """v4.6 (2026-09-01 semantic-audit batch P1-P7; base v4.1 2026-07-07): bucket an attendee/walk-in row into one of 8 engagement categories.
+    Chat-semantic layer runs over the attendee's FULL chat messages (msgs, from build_chat_corpus);
+    falls back to the evidence-string split when msgs is None (missing zip / name in >1 room).
     Mutually exclusive, priority-ordered: non chatted -> negative engagement (STRONG negativity
     dominates + zero buying signals; pace/AV feedback and question-topic words never count)
     -> purchase intent high (payment confirm/friction, how-to-join, EMI/discount ask, D1>=9,
@@ -200,11 +215,18 @@ def categorize(row, ix, msgs=None, orphan=False, no_text=False):
     _hk = (_HAND_DATE[0], _ir_norm_name(row[ix["Attendee"]] if "Attendee" in ix else ""))
     if _hk in _HAND:
         return _HAND[_hk]
+    _an = str(row[ix["Attendee"]] or "") if "Attendee" in ix else ""
+    if _an and _TEAM_RE.search(_an):
+        # v4.6 P7 (2026-09-01 audit): bot/notetaker-named attendee row -- never a dialable lead
+        return CAT_NCI, "bot/notetaker display name (%s) -- verify a real person is on this contact before any outreach" % _an.strip()[:40]
     if not chatted and not (orphan and msgs):
         return CAT_NC, ("no chat messages; " + ", ".join(watch)) if watch else "no chat messages; barely present"
     if no_text:
-        # v5.5: the engine counted chat for this person but NO message could be attributed
-        # to their contact (same-name registrants in one room). Cap at "no clear intent".
+        # v5.5 (user-approved 2026-07-27): the engine counted chat for this person but NO message could be
+        # attributed to their contact (same-name registrants in one room). The dims/counter fallback below
+        # runs with its text-corroboration guards disabled (full=False), which used to award confident
+        # labels on zero visible evidence. Cap at "no clear intent" instead. The genuine missing-zip
+        # fallback is unaffected: no_text is only set when a contact corpus was successfully built.
         b = "engine counted chat but no message could be attributed to this contact (same-name ambiguity); label capped"
         if watch: b += "; " + ", ".join(watch)
         return CAT_NCI, b
@@ -219,6 +241,9 @@ def categorize(row, ix, msgs=None, orphan=False, no_text=False):
         s['pay_sup'] += s['pay']; s['pay'] = 0   # angry paid-registrant: 'paid' mentions are grievance, not confirmation
     if s['sneg'] >= 1 and 3 * s['sneg'] >= max(mm, 1) and not (s['pay'] or s['frict'] or s['price']):
         s['join'] = s['emi'] = s['disc'] = 0     # scam-rant mentioning EMI/joining is not purchase intent
+    if s.get('ab') and not (s['pay'] or s['frict']):
+        # v4.6 P2: hard abuse in chat -- price mentions/buying-language are taunts, not asks; let NEG decide
+        s['price'] = 0; s['join'] = s['emi'] = s['disc'] = 0; d1 = 0.0; d3 = 0.0; im = 0.0; d7 = 0.0
     buy_text = s['pay'] or s['frict'] or s['join'] or s['emi'] or s['disc'] or s['price']
     no_buy = (not buy_text) and d1 == 0 and im == 0 and d7 == 0 and d3 == 0
     # dominant strong negativity where any 'buying language' is only angry paid-mentions (suppressed):
@@ -228,9 +253,9 @@ def categorize(row, ix, msgs=None, orphan=False, no_text=False):
         b = "existing-customer grievance (paid earlier, unresolved issue)"
         if watch: b += "; " + ", ".join(watch)
         return CAT_NEG, b
-    # v4.2: severe accusations/abuse/waste-verdicts always dominate; mild pitch-fatigue
-    # needs dominance over the person's meaningful content, and heavy ritual participation
-    # or explicit praise outweighs it.
+    # v4.2 (2026-07-07 NEG re-audit): severe accusations/abuse/waste-verdicts always dominate;
+    # mild pitch-fatigue (boring/irritating/stop-promoting) needs dominance over the person's
+    # meaningful content, and heavy ritual participation or explicit praise outweighs it.
     subst = max(1, len(msgs) - s['rit'] - s['tech'])
     mild_neg = (s['sneg'] == 0) and (s['mild'] >= 3 or (s['mild'] >= 2 and s['mild'] >= 0.5 * max(mm, 1)) or (s['mild'] >= 1 and subst <= 3 and mm <= 2 and s.get('mild_tgt', 0) > 0))
     if mild_neg and (s['rit'] >= 6 and s['mild'] <= 3): mild_neg = False
@@ -279,28 +304,31 @@ def categorize(row, ix, msgs=None, orphan=False, no_text=False):
     progfit = (full and any(PROGFIT.search(x) for x in msgs)) or bool(s.get('delib'))
     dims_ok = progbuy and not (full and s['toolp'] > 0 and not corrob)
     d7_corrob = d7 > 0 and corrob
-    im_pih = im >= 2 and corrob   # v4.4: engine-dim self-corroboration removed; text anchors only
+    im_pih = im >= 2 and corrob   # v4.4: engine-dim self-corroboration (d1>=3) removed; text anchors only
     if courseq: t.append("course-detail ask")
     if fup and not corrob: t.append("%d follow-up ask(s) (certificate/link/notes)" % fup)
     if s.get('addon') and s['pay'] and not (s['frict'] or s['join'] or s['emi'] or s['disc'] or courseq):
         t = [x if x != "payment-confirmation in chat" else "paid registration add-on (fulfilment follow-up)" for x in t]
-    if s['pay'] or s['frict'] or s['join'] or s['emi'] or s['disc'] or courseq or (d1 >= 9 and dims_ok) or im_pih or d7_corrob or (d1 > 0 and d3 > 0 and dims_ok):
+    _txtanchor = corrob or s['price'] or (not full)   # v4.6 P1: dim-only promotion needs a text anchor
+    if s['pay'] or s['frict'] or s['join'] or s['emi'] or s['disc'] or courseq or (d1 >= 9 and dims_ok and _txtanchor) or im_pih or d7_corrob or (d1 > 0 and d3 > 0 and dims_ok and _txtanchor):
         return CAT_PIH, "; ".join(t + ctx)
     nonrit = [m for m in msgs if not RITUALTOK.match(m.strip())]
     _nontech = [m for m in nonrit if not TECHNOISE.search(m)]
     techdom = bool(nonrit) and len(_nontech) == 0 and s['tech'] >= 1
-    _sub = [m for m in _nontech if not (POSTOK.search(m) and len(m) < 80 and '?' not in m) and len(m.strip()) > 3 and not MILDNEG.search(m)]
+    _sub = [m for m in _nontech if not (POSTOK.search(m) and len(m) < 80 and '?' not in m) and len(m.strip()) > 3 and not MILDNEG.search(m) and not RITUALPHRASE.match(m.strip())]
     praisedom = full and bool(nonrit) and len(_sub) == 0 and not buy_text and not s['price']
     if (techdom or praisedom) and d4 == 0 and not buy_text:
         b = "only technical/AV/pace messages and generic chat" if techdom else "only praise/AV/generic chat, no substantive signal"
         if watch: b += "; " + ", ".join(watch)
         return CAT_NCI, b
     if s['price']: t.append("program price ask")
-    if s['price'] or ((d1 > 0 or im >= 1 or d3 > 0 or d5 > 0 or d7 > 0) and (dims_ok or progfit)):
+    if s.get('entfit'): t.append("enterprise/team rollout fit")   # v4.6 P6
+    if s['price'] or s.get('entfit') or ((d1 > 0 or im >= 1 or d3 > 0 or d5 > 0 or d7 > 0) and (dims_ok or progfit)):
         return CAT_SI, "; ".join(t + ctx)
     if d4 > 0: t.append("use-case/profession fit (D4=%d)" % int(d4))
     if mm >= 3: t.append("%d meaningful msgs" % int(mm))
-    if d4 > 0 or mm >= 3:
+    _substm = [m for m in msgs if len(m.strip()) > 3 and not RITUALTOK.match(m.strip()) and not RITUALPHRASE.match(m.strip())]   # v4.6 P5
+    if d4 > 0 or (mm >= 3 and ((not full) or len(_substm) >= 2)):
         return CAT_MI, "; ".join(t + ctx)
     if (mm >= 1 or s.get('qc', 0) >= 1) and (s.get('qc', 0) > 0 or s['toolp'] > 0):
         b = "asks content/how-to questions (%d meaningful msg(s)), no buying language" % int(mm)
@@ -343,3 +371,84 @@ def categorize_person(name, engine_chatted, pct_att, cta, pricing, dims, counts,
         counts.get('intent', 0), counts.get('mean', 0), counts.get('neg', 0),
     ]
     return categorize(row, _IX, msgs=msgs, orphan=orphan, no_text=no_text)
+
+
+# ---------------------------------------------------------------- Confidence (TOOL-ONLY)
+# NOT engine code. The v4.6 engine neither computes nor publishes a Confidence value
+# ("Confidence" appears 0 times in invited_report.py and is absent from every published
+# Lead Score file); this implements the update spec's STEP 8 rules for this tool alone.
+# It is deliberately kept OUT of the AST-frozen region and derived from the basis string
+# that categorize() already returns, so it cannot perturb a single category decision and
+# costs no second pass over the messages.
+
+# An explicit TEXT anchor fired -> the label rests on something the person actually typed.
+_CONF_HIGH_TAGS = (
+    "payment-confirmation in chat",
+    "paid registration add-on",
+    "payment friction/attempt",
+    "asked how to join/enroll",
+    "EMI/installment ask",
+    "discount ask",
+    "program price ask",
+    "course-detail ask",
+    "enterprise/team rollout fit",          # v4.6 P6
+    "strongly negative/complaint msg",      # sneg-dominant NEG
+    "existing-customer grievance",
+    "bot/notetaker display name",           # v4.6 P7 -- a rule, not an inference
+)
+# Dim- or count-driven promotions, and the praise/tech-only floor.
+_CONF_MED_TAGS = (
+    "strong buying language",
+    "buying language",
+    "intent msg",
+    "decision-ready",
+    "urgency/timeline language",
+    "practical purchase objection",
+    "use-case/profession fit",
+    "meaningful msgs",
+    "meaningful msg(s)",                   # parenthesised variant (MI late-rescue, IS, NEG ctx)
+    "only praise/AV/generic chat",
+    "only technical/AV",
+)
+
+
+def confidence_for(category, basis, full=True, no_text=False):
+    """'high' | 'medium' | 'low' for one categorised row (update spec STEP 8).
+
+    high   -- an explicit text anchor fired, or a rule (bot / hand-override) decided it.
+    medium -- dim-driven promotion, mm-count-driven moderate interest, praise/tech-only NCI.
+    low    -- evidence-split fallback (no full corpus), no_text-capped rows, and
+              'non chatted' rows resting only on partial watch data.
+    """
+    b = str(basis or "")
+    # The P7 bot basis is the ONLY one that interpolates the raw attendee display name, so
+    # it is matched on its fixed prefix and returned before any test below. That keeps
+    # untrusted name text (an attendee literally called "label capped") out of the
+    # substring tests, and it is a rule rather than an inference, so it outranks them.
+    if b.startswith("bot/notetaker display name ("):
+        return "high"
+    # low first: these describe rows whose evidence is missing or unattributable, so they
+    # must not be upgraded by a tag that happens to appear in the basis text.
+    if no_text or "label capped" in b:
+        return "low"
+    if category in (CAT_NC, CAT_NA):
+        return "low"          # no attributable chat / never joined: nothing was observed
+    if not full:
+        return "low"          # evidence-split fallback: categorising off quote fragments
+    # v4.6 P1 makes every purchase-intent-high gate rest on a text anchor: the first six
+    # are anchor tags outright, and each dim path requires corrob/price (`_txtanchor`).
+    # The `not full` escape hatch already returned above, so a row reaching here typed
+    # something. Deciding it by category also covers price-corroborated rows, whose
+    # "program price ask" tag the engine appends AFTER the PIH return and so never shows.
+    if category == CAT_PIH:
+        return "high"
+    # ", no buying language" is a NEGATED literal in the information-seeking basis; left in
+    # place it would substring-match the "buying language" MED tag and grade a row medium
+    # for the very signal it states is absent.
+    bb = b.replace(", no buying language", "")
+    if any(tag in bb for tag in _CONF_HIGH_TAGS):
+        return "high"
+    if any(tag in bb for tag in _CONF_MED_TAGS):
+        return "medium"
+    # remaining NEG is mild/pitch-fatigue-driven; remaining NCI is generic chat
+    return "medium" if category == CAT_NEG else "low"

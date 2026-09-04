@@ -24,7 +24,7 @@ from . import contact_norm as CN
 from . import parse_attendee as PA
 from . import parse_chat as PC
 from .attribute import build_room_attribution
-from .categorize import CAT_NA, CAT_NC, CAT_ORDER, categorize_person
+from .categorize import CAT_NA, CAT_NC, CAT_ORDER, categorize_person, confidence_for
 from .dimensions import Scorer, load_config
 
 DEFAULT_CFG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -48,6 +48,28 @@ COUNTRY_CC = {
     'Portugal': '351', 'Austria': '43', 'Finland': '358', 'Greece': '30', 'Israel': '972',
     'Mauritius': '230', 'Tanzania': '255', 'Zambia': '260', 'Zimbabwe': '263', 'Ethiopia': '251',
     'Morocco': '212', 'Jordan': '962', 'Lebanon': '961', 'Afghanistan': '93', 'South Korea': '82',
+    # 2026-09-03 checkup: every Country/Region value present in the 11 archived exports
+    # that this map did not cover. Unmapped countries fell through to DEFAULT_CC, so a
+    # number already in international form was published as '+91-<foreign number>'.
+    'Congo, Democratic Republic of the': '243', 'Republic of Congo': '242', 'Congo': '242', 'Maldives': '960',
+    'Lithuania': '370', 'Korea, Republic of': '82', 'Korea': '82', 'Latvia': '371',
+    'Rwanda': '250', 'Czech Republic': '420', 'Czechia': '420', 'Namibia': '264',
+    'Angola': '244', 'Malta': '356', 'Algeria': '213', 'Seychelles': '248',
+    'Guinea': '224', 'Iraq': '964', 'Myanmar': '95', 'Togo': '228',
+    'Georgia': '995', 'Cameroon': '237', 'Malawi': '265', 'Benin': '229',
+    'Cyprus': '357', 'Botswana': '267', 'Bulgaria': '359', 'Taiwan': '886',
+    'Libya': '218', 'Luxembourg': '352', 'Croatia': '385', 'Senegal': '221',
+    'Sierra Leone': '232', 'Kazakhstan': '7', 'Costa Rica': '506', 'Panama': '507',
+    'Estonia': '372', 'Slovakia': '421', 'Brunei Darussalam': '673', 'Brunei': '673',
+    'Tajikistan': '992', 'Mozambique': '258', 'Fiji': '679', 'Chad': '235',
+    'Ukraine': '380', 'Albania': '355', 'Aruba': '297', 'Guyana': '592',
+    'Serbia': '381', 'Papua New Guinea': '675', 'Sudan': '249', 'South Sudan': '211',
+    'Madagascar': '261', 'Colombia': '57', 'Timor-Leste': '670', "Lao People's Democratic Republic": '856',
+    'Laos': '856', 'Hungary': '36', 'Bosnia and Herzegovina': '387', 'Uruguay': '598',
+    "Côte d'Ivoire": '225', "Cote d'Ivoire": '225', 'Ivory Coast': '225', 'Liberia': '231',
+    'Armenia': '374', 'Cambodia': '855', 'Cayman Islands': '1', 'Bahamas': '1',
+    'Saint Lucia': '1', 'Sint-Maarten (Dutch)': '1', 'Sint Maarten': '1', 'Antigua and Barbuda': '1',
+    'Puerto Rico': '1', 'Jamaica': '1', 'Trinidad and Tobago': '1',
 }
 DEFAULT_CC = '91'   # workshop is India-centric; blank/unknown country defaults to +91
 
@@ -74,6 +96,26 @@ def cc_split(country, phone):
         if cc and len(d) >= 7:
             return ('+' + cc, d)
         return ('', raw)
+    # Last resort. The peel above only runs when the Country cell names a country we know,
+    # so a blank or unmapped country (Angola, Togo, Croatia... none are in COUNTRY_CC) used
+    # to publish a full international number with DEFAULT_CC bolted on front: the same UAE
+    # number came out '+971-545512993' with the country filled and '+91-971545512993'
+    # without it. Peel a known dial code here too -- longest first, and ONLY for numbers
+    # at least 12 digits long. An India-shaped 10-digit mobile is never touched, and nor is
+    # an 11-digit number: with no country to corroborate it, '94617772936' is as likely a
+    # mistyped Indian mobile as a Sri Lankan one, and peeling would delete a real digit.
+    # At 12+ digits with a known code and 8-10 digits left over, it is an international
+    # number (see test_cc_split_keeps_ten_digit_numbers_whole).
+    #
+    # ONLY when the country cell is empty. With a country named, that cell is the better
+    # evidence and the branch above has already used it; peeling anyway truncated real
+    # digits on rows whose own country said India ('94617772936' -> '+94-617772936' loses
+    # a digit to Sri Lanka's code). Losing digits is irreversible, whereas an unpeeled
+    # number keeps every digit visible next to a merely wrong prefix.
+    if not cc and len(d) >= 12:
+        for k in sorted(set(COUNTRY_CC.values()), key=len, reverse=True):
+            if d.startswith(k) and 8 <= len(d) - len(k) <= 10:
+                return ('+' + k, d[len(k):])
     return ('+' + (cc or DEFAULT_CC), d)
 
 
@@ -252,8 +294,60 @@ class GateError(Exception):
     """A blocking quality-gate failure: the output must NOT be downloaded."""
 
 
+# The Activity Date column is written in ONE spelling, whatever the user typed:
+#   30/08/2026 11:00:00        (dd/mm/yyyy hh:mm:ss)
+ACTIVITY_OUT_FMT = "%d/%m/%Y %H:%M:%S"
+# Accepted INPUT spellings. The field asks for dd:mm:yy hh:mm, but a paste from another
+# sheet should not be rejected -- day-first everywhere, which is the convention in use.
+_ACTIVITY_IN_FMTS = (
+    "%d:%m:%y %H:%M", "%d:%m:%y %H:%M:%S", "%d:%m:%Y %H:%M", "%d:%m:%Y %H:%M:%S",
+    "%d/%m/%y %H:%M", "%d/%m/%y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S",
+    "%d-%m-%y %H:%M", "%d-%m-%y %H:%M:%S", "%d-%m-%Y %H:%M", "%d-%m-%Y %H:%M:%S",
+    "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S",
+    "%d:%m:%y", "%d/%m/%y", "%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d",
+)
+
+
+def parse_activity_date(s):
+    """The typed Activity Date as a datetime, or None if no accepted spelling matches."""
+    t = " ".join(str(s or "").strip().replace("T", " ").split())
+    if not t:
+        return None
+    for f in _ACTIVITY_IN_FMTS:
+        try:
+            return datetime.datetime.strptime(t, f)
+        except ValueError:
+            continue
+    return None
+
+
+def valid_activity_date(s):
+    """True when the typed Activity Date is in a spelling the tool can normalise."""
+    return parse_activity_date(s) is not None
+
+
+def normalize_activity_date(s):
+    """(text_for_the_column, recognised). An unrecognised entry is passed through
+    VERBATIM -- the user may be matching an external sheet -- and reported, never
+    silently reinterpreted."""
+    dt = parse_activity_date(s)
+    if dt is not None:
+        return dt.strftime(ACTIVITY_OUT_FMT), True
+    return str(s or "").strip(), False
+
+
+def fmt_phone(cc, national):
+    """'+cc-number' for the single Phone Number column. Blank when there is no number;
+    no leading dash when the dial code could not be determined (junk/short numbers)."""
+    national = str(national or "").strip()
+    cc = str(cc or "").strip()
+    if not national:
+        return ""
+    return ("%s-%s" % (cc, national)) if cc else national
+
+
 def process_session(rooms, pricing_offset=None, cta_offset=None, cfg_path=DEFAULT_CFG,
-                    progress=None):
+                    progress=None, activity_date=None, session_name=None):
     """rooms from load_session() -> result dict (rows, stats, warnings, audit...).
 
     pricing_offset / cta_offset: minutes from Actual Start Time, or None. Optional --
@@ -268,6 +362,7 @@ def process_session(rooms, pricing_offset=None, cta_offset=None, cfg_path=DEFAUL
     room_stats = OrderedDict()
     S = Counter()
     session_dates = []
+    session_starts = []
 
     people = OrderedDict()      # global_key -> person dict
     phone_owner = {}            # normalised phone -> key_email of its single chat owner
@@ -287,6 +382,7 @@ def process_session(rooms, pricing_offset=None, cta_offset=None, cfg_path=DEFAUL
         meta = next((m for m in metas if m.get('start')), metas[0] if metas else {})
         if meta.get('start'):
             session_dates.append(meta['start'].date())
+            session_starts.append(meta['start'])
 
         parsed = []
         for text in d['chat_texts']:
@@ -441,6 +537,23 @@ def process_session(rooms, pricing_offset=None, cta_offset=None, cfg_path=DEFAUL
 
     # ---------------------------------------------------------------- categorise + split
     tick("scoring %d people" % len(people))
+    # Activity Date: what the user typed wins; blank falls back to this session's real
+    # start time in the same dd:mm:yy hh:mm spelling, so the column is never empty by
+    # accident. An unparseable entry is kept VERBATIM (the user may be matching an
+    # external sheet's convention) but reported so it is never silently reinterpreted.
+    act = str(activity_date or "").strip()
+    act_derived = False
+    act_ok = True
+    if not act:
+        if session_starts:
+            act = min(session_starts).strftime(ACTIVITY_OUT_FMT)
+            act_derived = True
+        else:
+            act = ""
+    else:
+        act, act_ok = normalize_activity_date(act)
+    sess_name = str(session_name or "").strip()
+
     rows = []
     catc = Counter()
     for gk, p in people.items():
@@ -453,6 +566,7 @@ def process_session(rooms, pricing_offset=None, cta_offset=None, cfg_path=DEFAUL
             joined = [' '.join(b['lines']) for b in p['blocks']]
         has_cm = bool(lines)
         show_ua = (not has_cm) and p['engine_chatted'] and p['unattr']
+        no_text = False
         if not p['attended']:
             cat, basis = CAT_NA, "registered, never joined"
             dims = {}
@@ -464,7 +578,7 @@ def process_session(rooms, pricing_offset=None, cta_offset=None, cfg_path=DEFAUL
             if not p['no_timing'] or p['minutes'] > 0:
                 pct = round(min(100.0, 100.0 * p['minutes'] / dur), 1) if dur else None
             orphan = has_cm and not p['engine_chatted']
-            no_text = p['engine_chatted'] and not has_cm
+            no_text = bool(p['engine_chatted'] and not has_cm)
             cat, basis = categorize_person(
                 p['name'], p['engine_chatted'], pct,
                 p['cta'], p['pricing'],
@@ -482,12 +596,16 @@ def process_session(rooms, pricing_offset=None, cta_offset=None, cfg_path=DEFAUL
         rooms_disp = " | ".join(r for r, _m in sorted(p['rooms'], key=lambda t: -t[1]))
         catc[cat] += 1
         rows.append({
+            'activity_date': act, 'session_name': sess_name,
+            'phone_fmt': fmt_phone(cc, pn),
             'name': p['name'], 'email': p['email'], 'cc': cc, 'phone': pn,
             'category': cat, 'basis': basis, 'relevant': rel, 'deleted': dele,
             'all_chats': ac, 'chatted': 'Yes' if (has_cm or show_ua) else 'No',
             'room': rooms_disp, 'attended': 'Yes' if p['attended'] else 'No',
             'minutes': round(p['minutes'], 1), 'msg_count': len(lines),
             'pricing': p['pricing'], 'cta': p['cta'],   # True / False / None (no offsets)
+            # tool-only, spec STEP 8; derived from the basis, never fed back into it
+            'confidence': confidence_for(cat, basis, full=True, no_text=no_text),
         })
 
     # deterministic, deliverable-friendly order: category priority, then presence
@@ -532,7 +650,23 @@ def process_session(rooms, pricing_offset=None, cta_offset=None, cfg_path=DEFAUL
         'freq_suspects': aud['freq_suspects'],
         'pricing_offset': pricing_offset, 'cta_offset': cta_offset,
         'session_date': min(session_dates).isoformat() if session_dates else None,
+        'activity_date': act,
+        'activity_date_derived': act_derived,
+        'activity_date_valid': act_ok,
+        'session_name': sess_name,
     }
+    if act and not act_ok:
+        warnings.append("Activity Date %r was not in a recognised date spelling -- it was written "
+                        "to every row exactly as typed instead of as dd/mm/yyyy hh:mm:ss. Check it "
+                        "before appending to a master sheet." % act)
+    if not act:
+        # No date was given AND no room had a parseable 'Actual Start Time', so the fallback
+        # had nothing to derive from. Never let that column go out blank in silence.
+        warnings.append("Activity Date is BLANK on every row -- none was entered and no room's "
+                        "'Actual Start Time' could be parsed, so there was nothing to fall back "
+                        "on. Enter the date and time before using this file.")
+    if not sess_name:
+        warnings.append("No Session Name was given -- that column is blank on every row.")
     if any(audit_bad.values()):
         # junk leaked into Relevant Chat -- the deliverable must not ship
         result['gate_failed'] = ("chat-clean audit non-zero: bad_chars=%(bad_chars)d "

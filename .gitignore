@@ -1,14 +1,33 @@
+# Python
 __pycache__/
 *.py[cod]
-.vercel
+*.egg-info/
 .venv/
 venv/
-.env
-.env.*
+env/
 
-# Zoom exports and generated workbooks are session data - they do not belong in
-# the repository, and a Zoom attendee CSV carries names, emails and phone numbers.
+# Tool output / scratch — never commit workshop data or generated deliverables
 *.xlsx
+*.xls
 *.csv
+!config/*.csv
+removed-chat.txt
+zcc_*/
+output/
+tmp/
+
+# Raw Zoom exports must never be committed (contain attendee PII)
 *.zip
-!tests/**/*.csv
+RAW FILES/
+attendee_*.csv
+meeting_saved*.txt
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local Claude Code config (machine-specific paths)
+.claude/

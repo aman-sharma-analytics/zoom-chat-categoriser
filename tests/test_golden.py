@@ -34,12 +34,17 @@ def test_preflight_expected_flags():
         print("SKIP (no real data on this machine)"); return
     import glob
     from core import pipeline, preflight
+    # Verified against the real exports 2026-09-03. Every entry is a KNOWN-BAD room that
+    # the validator must keep catching; every other room in every zip must read 'ok'.
     expected = {
-        ("12 July Workshop Data.zip", "Ops 6"): "WARN",
-        ("19 July Workshop Data.zip", "OPS 3"): "FAIL",
-        ("19 July Workshop Data.zip", "OPS 5"): "FAIL",
-        ("2 August Workshop Data.zip", "Zoom 11"): "FAIL",
-        ("21 June Workshop Data.zip", "Evening"): "FAIL",
+        ("12 July Workshop Data.zip", "Ops 6"): "WARN",       # 48 NUL bytes
+        ("19 July Workshop Data.zip", "OPS 3"): "FAIL",       # no chat export
+        ("19 July Workshop Data.zip", "OPS 5"): "FAIL",       # no chat export
+        ("2 August Workshop Data.zip", "Zoom 11"): "FAIL",    # chat 7 min of ~228
+        ("21 June Workshop Data.zip", "Evening"): "FAIL",     # poll CSV only, no attendee report
+        # found 2026-09-03 when the newer sessions landed in RAW FILES:
+        ("16 August Workshop Data.zip", "Ops 5"): "FAIL",     # chat 90 min of ~226
+        ("30 August Workshop Data.zip", "AI Evening"): "FAIL",  # chat 23 min of ~226
     }
     for zp in sorted(glob.glob(os.path.join(RAW, "*.zip"))):
         zname = os.path.basename(zp)
@@ -113,12 +118,16 @@ def test_golden_2aug():
     it = ws.iter_rows(values_only=True)
     hdr = list(next(it))
     ix = {h: i for i, h in enumerate(hdr)}
+    # DUAL-KEY READ (update spec STEP 1): the engine renamed this column to
+    # "Session Engagement" on 2026-09-01. Prefer the new name, fall back to the old one
+    # so pre-v4.6 published files still load.
+    cat_col = "Session Engagement" if "Session Engagement" in ix else "Engagement Category"
     for r in it:
         if r[ix["Tag"]] not in ("Invited - Attended", "Attended - Not invited"):
             continue
         ke = CN.key_email(r[ix["Email"]]) or CN.key_email(r[ix["All Sheet Email"]])
         if ke:
-            gold[ke] = (r[ix["Engagement Category"]], r[ix["Relevant Chat"]] or "", r[ix["Deleted Chat"]] or "")
+            gold[ke] = (r[ix[cat_col]], r[ix["Relevant Chat"]] or "", r[ix["Deleted Chat"]] or "")
     wb.close()
 
     rooms, _ = _load("2 August Workshop Data.zip")

@@ -1,0 +1,27 @@
+# Render blueprint — deploys this app as ONE long-running web process.
+#
+# WHY single worker (--workers 1) and why this must NOT be serverless:
+# job state lives in an in-memory dict (app.py JOBS) and processing runs in a
+# background thread, with output files written to a local temp dir. A second
+# worker would not see jobs created by the first, so /api/status would return
+# "unknown job" at random. Do not raise the worker count.
+services:
+  - type: web
+    name: zoom-chat-categoriser
+    runtime: python
+    plan: free               # 512 MB, sleeps after ~15 min idle (~1 min cold start).
+                             # Measured: one room peaks ~57 MB, a full 7-room
+                             # session ~274 MB. Upgrade if you hit restarts.
+    region: singapore        # closest to India; change if you prefer
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      # Set these in the Render dashboard (Environment tab) to password-protect
+      # the app. Requires the basic-auth patch — see README "Deploying".
+      # - key: ZCC_USER
+      #   sync: false
+      # - key: ZCC_PASSWORD
+      #   sync: false
