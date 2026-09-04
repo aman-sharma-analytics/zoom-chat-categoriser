@@ -20,6 +20,13 @@ from core import build_xlsx, pipeline, preflight
 from core.pipeline import GateError
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# Vercel sets VERCEL=1 in the function environment. Nothing else in this file cares
+# where it is running - only whether a background thread will survive the response,
+# which on a serverless platform it does not. Render does, so this is false there
+# and the threaded path below is used unchanged.
+ON_SERVERLESS = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
 app = FastAPI(title="Zoom Chat Categoriser", docs_url=None, redoc_url=None)
 
 JOBS = {}
@@ -217,12 +224,27 @@ async def process(files: list[UploadFile] | None = File(None),
                      'summary': None, 'error': None, 'xlsx': None,
                      'notes': list(pre_notes), 'pre_notes': list(pre_notes),
                      'extras': extras == "on", 'dir': tempfile.mkdtemp(prefix='zcc_')}
-    t = threading.Thread(target=_run_job, daemon=True,
-                         args=(jid, inputs, att_inputs, chat_inputs,
-                               _num(pricing), _num(cta), extras == "on",
-                               (activity_date or "").strip()[:40],
-                               (session_name or "").strip()[:120]))
-    t.start()
+    args = (jid, inputs, att_inputs, chat_inputs,
+            _num(pricing), _num(cta), extras == "on",
+            (activity_date or "").strip()[:40],
+            (session_name or "").strip()[:120])
+    if ON_SERVERLESS:
+        # A serverless platform SUSPENDS the execution context as soon as the
+        # response is sent, so a daemon thread stops dead the moment this function
+        # returns. Measured on a full-size room deployed to Vercel: the job sat at
+        # "scoring 16781 people" and had not moved 35 seconds later, while a
+        # six-person job finished because it completed inside the first request
+        # window. So on the hosted copy the work is done HERE, before responding,
+        # and the first /api/status already reports 'done'.
+        #
+        # The cost is that the request now lasts as long as the processing, and the
+        # platform stops it at 60 s. One room is comfortably inside that; a whole
+        # multi-room session is not, and the local copy is the answer for those.
+        # The progress panel stops animating - it jumps straight to the result -
+        # which is a fair trade for a job that finishes at all.
+        _run_job(*args)
+    else:
+        threading.Thread(target=_run_job, daemon=True, args=args).start()
     return {"job": jid}
 
 
